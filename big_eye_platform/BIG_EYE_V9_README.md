@@ -1,11 +1,12 @@
-# Big Eye v8 Enterprise build
+# Big Eye v9 Enterprise build
 
 ## Production surface
 
 - **Frontend:** `big_eye_platform/big-eye` (Vite + React, Vercel-ready)
 - **Live backend:** `big_eye_platform/supabase/functions`
 - **Database sync:** `big_eye_platform/supabase/migrations/20261102000000_big_eye_v8_enterprise_security.sql`
-- **Version:** see `../VERSION` (`8.0.0`)
+- **Provider secret names:** `big_eye_platform/supabase/PROVIDER_SECRETS.example`
+- **Version:** see `../VERSION` (`9.0.0`)
 
 ## New operating tabs
 
@@ -15,6 +16,12 @@
    double-extension detection, and optional VirusTotal hash-only lookup.
 3. **Sync & Audit** — cloud scan ledger, incident queue, watchlist indicators,
    provider quota rows, and explicit offline/degraded/synchronized status.
+4. **API Control Room** — provider catalog, configured/public state, wiring
+   status, quota policy, data handling, and legal guardrails.
+
+The catalog currently covers 26 documented provider contracts. “Cataloged” does
+not mean “active”: a provider becomes live only after its secret is configured,
+its response contract is tested, and its terms/data handling are approved.
 
 ## Safety and deployment behavior
 
@@ -38,6 +45,7 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 supabase functions deploy analyze-email-security
 supabase functions deploy scan-attachment-hash
+supabase functions deploy get-provider-catalog
 cd big-eye
 npm install
 npm run build

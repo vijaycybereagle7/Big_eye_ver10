@@ -7,6 +7,7 @@ import AuthModal from './components/AuthModal';
 import SecurityCommandCenter from './components/SecurityCommandCenter';
 import MalwareTriage from './components/MalwareTriage';
 import SyncAuditCenter from './components/SyncAuditCenter';
+import ProviderControlRoom from './components/ProviderControlRoom';
 import AllInOneAnalysis from './components/AllInOneAnalysis';
 import EmailHeaderAnalyzer from './components/EmailHeaderAnalyzer';
 import DomainChecker from './components/DomainChecker';
@@ -36,6 +37,7 @@ type Tool =
   | 'database-analysis'
   | 'malware-triage'
   | 'sync-audit'
+  | 'integrations'
   | 'admin-dashboard';
 
 const baseTools = [
@@ -53,6 +55,7 @@ const baseTools = [
   { id: 'database-analysis' as Tool, name: 'Database Analysis' },
   { id: 'malware-triage' as Tool, name: 'Malware Triage' },
   { id: 'sync-audit' as Tool, name: 'Sync & Audit' },
+  { id: 'integrations' as Tool, name: 'API Control Room' },
 ];
 
 function App() {
@@ -172,6 +175,7 @@ function App() {
           {activeTool === 'database-analysis' && <DatabaseAnalysis />}
           {activeTool === 'malware-triage' && <MalwareTriage />}
           {activeTool === 'sync-audit' && <SyncAuditCenter />}
+          {activeTool === 'integrations' && <ProviderControlRoom />}
           {activeTool === 'admin-dashboard' && isAdmin && <AdminDashboard />}
         </div>
       </main>

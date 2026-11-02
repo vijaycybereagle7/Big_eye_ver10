@@ -18,6 +18,7 @@ cd big_eye_platform
 supabase db push
 supabase functions deploy analyze-email-security
 supabase functions deploy scan-attachment-hash
+supabase functions deploy get-provider-catalog
 supabase functions deploy database-email-validation
 supabase functions deploy database-threat-intelligence
 supabase functions deploy database-comprehensive-analysis

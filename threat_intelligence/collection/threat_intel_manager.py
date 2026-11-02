@@ -133,6 +133,7 @@ class ThreatIntelligenceManager:
         logger.info(f"Using collectors: {collectors}")
         
         tasks = []
+        task_collectors = []
         
         # Create lookup tasks for each collector
         for collector_key in collectors:
@@ -155,6 +156,7 @@ class ThreatIntelligenceManager:
                 continue
             
             tasks.append(task)
+            task_collectors.append(collector_key)
         
         # Execute all lookups concurrently
         results = []
@@ -162,8 +164,7 @@ class ThreatIntelligenceManager:
             try:
                 all_results = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                for i, result in enumerate(all_results):
-                    collector_key = list(self.collectors.keys())[i] if i < len(self.collectors) else f"collector_{i}"
+                for collector_key, result in zip(task_collectors, all_results):
                     
                     if isinstance(result, Exception):
                         logger.error(f"Error in {collector_key}: {result}")

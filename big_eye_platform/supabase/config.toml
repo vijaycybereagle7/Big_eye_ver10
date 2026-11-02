@@ -10,3 +10,6 @@ verify_jwt = true
 
 [functions.get-api-usage]
 verify_jwt = true
+
+[functions.get-provider-catalog]
+verify_jwt = true

@@ -1,5 +1,17 @@
 # Big Eye changelog
 
+## 9.0.0 - 2026-11-02
+
+- Added the API Control Room tab with a governed catalog of threat-intelligence,
+  email, URL, domain, network, and mailbox provider contracts.
+- Added secret-presence status through `get-provider-catalog`; provider secrets
+  and live responses are never exposed to the browser.
+- Added explicit quota, data-handling, attribution, and legal-use guardrails for
+  every cataloged provider.
+- Added Supabase deployment configuration for the provider catalog function.
+- Fixed the Python threat-intelligence manager so subset lookups preserve the
+  correct provider-to-result mapping.
+
 ## 8.0.0 - 2026-11-02
 
 - Added a Security Operations Command Center with six-engine scoring and response playbooks.

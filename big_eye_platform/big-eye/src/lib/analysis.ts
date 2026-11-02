@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from './supabase';
+import { PROVIDER_CATALOG } from './providerCatalog';
 
 export type RiskLevel = 'safe' | 'low' | 'medium' | 'high' | 'critical';
 export type FindingSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
@@ -633,6 +634,23 @@ function localApiUsage() {
   return { usage: [], message: 'No live API quota data in offline preview mode.' };
 }
 
+function localProviderCatalog() {
+  return {
+    providers: PROVIDER_CATALOG.map((provider) => ({
+      ...provider,
+      configured: provider.auth === 'public',
+      secretNames: provider.envKeys,
+      configuredSecretCount: 0,
+      health: provider.auth === 'public' ? 'public-endpoint' : 'needs-configuration',
+      message: provider.auth === 'public' ? 'Public adapter available; provider terms and rate limits still apply.' : 'Offline preview cannot inspect Supabase secrets. No provider request is made.',
+    })),
+    generatedAt: new Date().toISOString(),
+    secretsNotExposed: true,
+    usage: [],
+    note: 'Offline preview uses the versioned provider manifest and never contacts external providers.',
+  };
+}
+
 function localBulkAnalysis(body: any) {
   const emails = Array.isArray(body.emails) ? body.emails : [];
   const domains = Array.isArray(body.domains) ? body.domains : [];
@@ -801,6 +819,8 @@ async function localInvoke(functionName: string, body: any): Promise<any> {
       return localBulkAnalysis(body);
     case 'get-api-usage':
       return localApiUsage();
+    case 'get-provider-catalog':
+      return localProviderCatalog();
     case 'scan-attachment-hash':
       return {
         status: 'not-configured',
