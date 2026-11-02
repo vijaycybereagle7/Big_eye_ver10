@@ -1,0 +1,190 @@
+{
+  "firewall": {
+    "default_policy": "deny",
+    "logging": {
+      "enabled": true,
+      "level": "all",
+      "retention_days": 90,
+      "real_time_alerts": true
+    },
+    "rules": {
+      "evaluation_order": "first_match",
+      "rule_timeout": 0,
+      "stateful_inspection": true
+    },
+    "zones": {
+      "external": {
+        "description": "Public internet",
+        "default_action": "deny",
+        "security_level": "high"
+      },
+      "dmz": {
+        "description": "Demilitarized zone",
+        "default_action": "restrict",
+        "security_level": "medium"
+      },
+      "internal": {
+        "description": "Internal network",
+        "default_action": "allow",
+        "security_level": "medium"
+      },
+      "secure": {
+        "description": "High security zone",
+        "default_action": "deny",
+        "security_level": "high"
+      },
+      "management": {
+        "description": "Management network",
+        "default_action": "deny",
+        "security_level": "critical"
+      }
+    }
+  },
+  "network_segmentation": {
+    "enabled": true,
+    "micro_segmentation": false,
+    "zero_trust": false,
+    "segments": {
+      "internal_lan": {
+        "cidr": "192.168.0.0/16",
+        "gateway": "192.168.0.1",
+        "allowed_services": ["http", "https", "dns", "dhcp", "smtp"],
+        "restricted_services": ["telnet", "ftp", "ssh"],
+        "isolation_level": 5
+      },
+      "dmz": {
+        "cidr": "192.168.1.0/24",
+        "gateway": "192.168.1.1",
+        "allowed_services": ["http", "https", "smtp"],
+        "restricted_services": ["ssh", "rdp", "database"],
+        "isolation_level": 8
+      },
+      "management": {
+        "cidr": "10.0.0.0/24",
+        "gateway": "10.0.0.1",
+        "allowed_services": ["ssh", "snmp", "rdp"],
+        "restricted_services": ["http", "https", "smtp"],
+        "isolation_level": 10
+      },
+      "secure_zone": {
+        "cidr": "172.16.0.0/16",
+        "gateway": "172.16.0.1",
+        "allowed_services": ["https", "database"],
+        "restricted_services": ["http", "ftp", "telnet"],
+        "isolation_level": 9
+      }
+    }
+  },
+  "intrusion_detection": {
+    "enabled": true,
+    "real_time_monitoring": true,
+    "alert_thresholds": {
+      "port_scan": 10,
+      "brute_force": 5,
+      "ddos": 1000,
+      "failed_logins": 5
+    },
+    "detection_methods": [
+      "signature_based",
+      "anomaly_based",
+      "behavioral_analysis"
+    ],
+    "response_actions": {
+      "port_scan": "alert",
+      "brute_force": "block_ip",
+      "ddos": "rate_limit",
+      "malware": "quarantine"
+    },
+    "logging": {
+      "detailed_logs": true,
+      "packet_capture": false,
+      "retention_days": 90
+    }
+  },
+  "network_monitoring": {
+    "bandwidth_monitoring": true,
+    "latency_monitoring": true,
+    "packet_analysis": true,
+    "flow_monitoring": true,
+    "real_time_alerts": true,
+    "historical_analysis": true
+  },
+  "vulnerability_scanning": {
+    "automated_scans": true,
+    "scan_frequency": "weekly",
+    "critical_scan_frequency": "daily",
+    "scan_scope": "all_systems",
+    "patch_management": true,
+    "security_updates": true
+  },
+  "dos_protection": {
+    "rate_limiting": true,
+    "connection_limits": true,
+    "bandwidth_throttling": true,
+    "geographic_filtering": false,
+    "ip_reputation": true
+  },
+  "vpn": {
+    "enabled": false,
+    "protocol": "openvpn",
+    "encryption": "AES-256",
+    "authentication": "certificate",
+    "two_factor": true,
+    "split_tunnel": false
+  },
+  "network_access_control": {
+    "802_1x": false,
+    "mac_address_filtering": false,
+    "device_profiling": true,
+    "quarantine_vlan": true,
+    "guest_network": false
+  },
+  "security_operations": {
+    "siem": {
+      "enabled": false,
+      "log_aggregation": true,
+      "correlation_rules": true,
+      "threat_intelligence": true
+    },
+    "incident_response": {
+      "automated_response": true,
+      "escalation_procedures": true,
+      "communication_plans": true
+    },
+    "security_analytics": {
+      "user_behavior_analytics": false,
+      "network_behavior_analytics": false,
+      "threat_hunting": false
+    }
+  },
+  "certificates": {
+    "management": "automated",
+    "renewal_notice_days": 30,
+    "certificate_authority": "internal",
+    "enforcement": "strict",
+    "hsts": {
+      "enabled": true,
+      "max_age": 31536000,
+      "include_subdomains": true,
+      "preload": false
+    }
+  },
+  "secure_communication": {
+    "tls": {
+      "minimum_version": "1.2",
+      "cipher_suites": [
+        "ECDHE+AESGCM",
+        "ECDHE+CHACHA20",
+        "DHE+AESGCM",
+        "DHE+CHACHA20"
+      ]
+    },
+    "ssh": {
+      "protocol_version": 2,
+      "allowed_authentications": ["publickey", "password"],
+      "root_login": false,
+      "password_authentication": true,
+      "key_exchange": ["curve25519-sha256", "diffie-hellman-group-exchange-sha256"]
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "gdpr_compliance": {
+    "data_retention": {
+      "default_periods": {
+        "personal_identifiers": "long_term",
+        "contact_data": "medium_term",
+        "behavioral_data": "short_term",
+        "technical_data": "short_term",
+        "financial_data": "long_term",
+        "health_data": "indefinite",
+        "location_data": "medium_term",
+        "biometric_data": "indefinite"
+      },
+      "period_values": {
+        "immediate": "0",
+        "short_term": "30",
+        "medium_term": "365",
+        "long_term": "2555",
+        "indefinite": "unlimited"
+      },
+      "auto_cleanup": true,
+      "cleanup_interval_days": 7
+    },
+    "data_subject_rights": {
+      "response_deadline_days": 30,
+      "verification_required": true,
+      "verification_methods": ["email", "phone", "security_questions"],
+      "fees": {
+        "basic_requests": "free",
+        "excessive_requests": "charged"
+      }
+    },
+    "consent_management": {
+      "explicit_consent_required": true,
+      "granular_consent": true,
+      "withdrawal_mechanism": true,
+      "consent_refresh_interval": 365,
+      "legal_bases": [
+        "consent",
+        "contract",
+        "legal_obligation",
+        "vital_interests",
+        "public_task",
+        "legitimate_interests"
+      ]
+    },
+    "data_portability": {
+      "formats": ["json", "csv", "xml"],
+      "compression": true,
+      "encryption": true
+    },
+    "breach_notification": {
+      "authority_notification_hours": 72,
+      "data_subject_notification": "required",
+      "notification_threshold": 1000,
+      "documentation_required": true
+    }
+  },
+  "processing_activities": {
+    "register_required": true,
+    "automated_updates": true,
+    "audit_trail": true
+  },
+  "privacy_by_design": {
+    "default_settings": {
+      "data_minimization": true,
+      "purpose_limitation": true,
+      "storage_limitation": true,
+      "accuracy": true,
+      "security": true,
+      "accountability": true
+    }
+  },
+  "third_party_sharing": {
+    "requires_consent": true,
+    "adequacy_decisions": true,
+    "standard_contractual_clauses": true,
+    "certification_required": true
+  },
+  "international_transfers": {
+    "adequacy_check": true,
+    "safeguards_required": true,
+    "impact_assessment_required": true
+  },
+  "data_protection_officer": {
+    "required": true,
+    "contact_required": true,
+    "independence_required": true,
+    "expertise_required": true
+  },
+  "compliance_monitoring": {
+    "automated_monitoring": true,
+    "regular_audits": true,
+    "training_programs": true,
+    "incident_response": true,
+    "documentation_maintenance": true
+  },
+  "anonymization": {
+    "methods": [
+      "hashing",
+      "pseudonymization", 
+      "aggregation",
+      "perturbation",
+      "synthetic_data"
+    ],
+    "irreversibility": true,
+    "utility_preservation": true
+  },
+  "data_inventory": {
+    "automated_discovery": true,
+    "categorization_required": true,
+    "source_tracking": true,
+    "flow_mapping": true
+  },
+  "legal_requirements": {
+    "applicable_laws": ["GDPR", "CCPA", "PIPEDA"],
+    "jurisdiction_specific": true,
+    "regular_updates": true
+  }
+}

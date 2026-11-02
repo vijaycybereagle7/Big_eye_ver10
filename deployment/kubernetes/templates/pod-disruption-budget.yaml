@@ -1,0 +1,252 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+# PodDisruptionBudget for FastAPI
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-fastapi
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: fastapi
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: fastapi
+
+---
+# PodDisruptionBudget for Celery Workers
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-worker
+
+---
+# PodDisruptionBudget for Celery Beat
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-beat
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-beat
+spec:
+  maxUnavailable: 0  # Ensure beat is always available
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-beat
+
+---
+# PodDisruptionBudget for Databases (read-only during maintenance)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-postgresql
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: postgresql
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-mongodb
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: mongodb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongodb
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-redis
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: redis
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+{{- end }}
+
+---
+{{- if .Values.serviceMonitor.enabled }}
+# ServiceMonitor for FastAPI
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-fastapi
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: fastapi
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.serviceMonitor.namespace }}
+  namespace: {{ .Values.serviceMonitor.namespace }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: fastapi
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.serviceMonitor.interval }}
+    path: {{ .Values.serviceMonitor.path }}
+    {{- with .Values.serviceMonitor.scrapeTimeout }}
+    scrapeTimeout: {{ . }}
+    {{- end }}
+
+---
+# ServiceMonitor for Celery Workers
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-worker
+spec:
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-worker
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.serviceMonitor.interval }}
+    path: {{ .Values.serviceMonitor.path }}
+
+---
+# ServiceMonitor for Databases (PostgreSQL)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-postgresql
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: postgresql
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  endpoints:
+  - port: http-metrics
+    interval: {{ .Values.serviceMonitor.interval }}
+    path: /metrics
+
+---
+# ServiceMonitor for MongoDB
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-mongodb
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: mongodb
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongodb
+  endpoints:
+  - port: http-metrics
+    interval: {{ .Values.serviceMonitor.interval }}
+    path: /metrics
+
+---
+# ServiceMonitor for Redis
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-redis
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: redis
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  endpoints:
+  - port: redis
+    interval: {{ .Values.serviceMonitor.interval }}
+    path: /metrics
+
+---
+# PrometheusRule for Alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-alerts
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+  {{- with .Values.monitoring.prometheusRule.additionalLabels }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.monitoring.prometheusRule.namespace }}
+  namespace: {{ .Values.monitoring.prometheusRule.namespace }}
+  {{- end }}
+  groups:
+  - name: threatintel.rules
+    rules:
+    {{- with .Values.monitoring.prometheusRule.rules.critical }}
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.monitoring.prometheusRule.rules.warning }}
+    - alert: HighCPUUsage
+      expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage detected"
+    - alert: HighMemoryUsage
+      expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage detected"
+    - alert: FastAPIDown
+      expr: up{job="fastapi-app"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "FastAPI application is down"
+    - alert: CeleryWorkerDown
+      expr: up{job="celery-worker"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Celery worker is down"
+    {{- end }}
+{{- end }}

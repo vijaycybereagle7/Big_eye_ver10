@@ -1,0 +1,12 @@
+# Supabase CLI configuration for the Big Eye v8 functions.
+# Link this folder to the target project with `supabase link` before deploy.
+project_id = "big-eye-enterprise"
+
+[functions.analyze-email-security]
+verify_jwt = true
+
+[functions.scan-attachment-hash]
+verify_jwt = true
+
+[functions.get-api-usage]
+verify_jwt = true

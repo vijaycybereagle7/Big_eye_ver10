@@ -1,0 +1,142 @@
+# Threat Intelligence Feeds Configuration
+
+threat_feeds:
+  virustotal:
+    name: "VirusTotal"
+    url: "https://www.virustotal.com/vtapi/v2/"
+    api_key: "${VIRUSTOTAL_API_KEY}"
+    rate_limit: 4  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      url_report: "url/report"
+      file_report: "file/report"
+      ip_address: "ip-address/report"
+      domain_report: "domain/report"
+    categories: ["malware", "phishing", "suspicious"]
+    
+  abuseipdb:
+    name: "AbuseIPDB"
+    url: "https://api.abuseipdb.com/api/v2/"
+    api_key: "${ABUSEIPDB_API_KEY}"
+    rate_limit: 100  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      check: "check"
+      check_block: "check-block"
+      blacklist: "blacklist"
+    categories: ["malicious_ip", "spam", "abuse"]
+    
+  greynoise:
+    name: "GreyNoise"
+    url: "https://api.greynoise.io/v3/"
+    api_key: "${GREYNOISE_API_KEY}"
+    rate_limit: 1000  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      community_ip: "community/ip/"
+      riot: "riot/"
+      timeline: "timeline/"
+    categories: ["suspicious_ip", "benign_ip", "malicious_ip"]
+    
+  shodan:
+    name: "Shodan"
+    url: "https://api.shodan.io/"
+    api_key: "${SHODAN_API_KEY}"
+    rate_limit: 100  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      host_info: "shodan/host/"
+      search: "shodan/host/search"
+      count: "shodan/host/count"
+    categories: ["iot_device", "service_info", "vulnerability"]
+    
+  otx:
+    name: "AlienVault OTX"
+    url: "https://otx.alienvault.com/api/v1/"
+    api_key: "${OTX_API_KEY}"
+    rate_limit: 1000  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      ip_info: "indicators/IPv4/"
+      domain_info: "indicators/domain/"
+      url_info: "indicators/url/"
+      file_info: "indicators/file/"
+    categories: ["malware", "ip_reputation", "domain_reputation"]
+    
+  spamhaus:
+    name: "Spamhaus"
+    url: "https://www.spamhaus.org/"
+    api_key: "${SPAMHAUS_API_KEY}"
+    rate_limit: 1000  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      blocklist: "query/"
+    categories: ["spam", "malware", "phishing"]
+    
+  phishtank:
+    name: "PhishTank"
+    url: "https://phishtank.org/api/"
+    api_key: "${PHISHTANK_API_KEY}"
+    rate_limit: 1000  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      check_url: "checkurl.php"
+      search: "search.php"
+    categories: ["phishing", "malicious_url"]
+    
+  safe_browsing:
+    name: "Google Safe Browsing"
+    url: "https://safebrowsing.googleapis.com/v4/"
+    api_key: "${SAFE_BROWSING_API_KEY}"
+    rate_limit: 10000  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      threat_matches: "threatMatches:find"
+      threat_list_updates: "threatListUpdates:fetch"
+    categories: ["malware", "phishing", "unwanted_software"]
+    
+  securitytrails:
+    name: "SecurityTrails"
+    url: "https://api.securitytrails.com/v1/"
+    api_key: "${SECURITYTRAILS_API_KEY}"
+    rate_limit: 1000  # requests per minute
+    timeout: 10
+    enabled: true
+    endpoints:
+      domain_info: "domain/"
+      ip_info: "host/"
+      dns_history: "domain/"
+    categories: ["domain_reputation", "dns_info", "subdomain"]
+
+monitoring:
+  health_check_interval: 300  # 5 minutes
+  metrics_collection_interval: 60  # 1 minute
+  alert_thresholds:
+    response_time_warning: 5  # seconds
+    response_time_critical: 10  # seconds
+    quota_usage_warning: 80  # percentage
+    quota_usage_critical: 95  # percentage
+    feed_down_timeout: 600  # 10 minutes
+    
+logging:
+  level: "INFO"
+  format: "json"
+  file: "/var/log/threat-feeds.log"
+  
+database:
+  connection_pool_size: 10
+  query_timeout: 30
+  retry_attempts: 3
+  
+redis:
+  connection_pool_size: 10
+  default_ttl: 3600  # 1 hour
+  max_ttl: 86400  # 24 hours

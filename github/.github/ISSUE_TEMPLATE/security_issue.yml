@@ -1,0 +1,150 @@
+---
+name: Security Issue
+about: Report a security vulnerability
+title: '[SECURITY] '
+labels: 'security'
+assignees: ''
+priority: critical
+
+---
+
+## ⚠️ Security Issue Reporting
+
+**Please do not create public issues for security vulnerabilities.**
+
+Please follow our security policy for reporting security issues. This form is for internal security team review only.
+
+**Please review our [Security Policy](SECURITY.md) before submitting.**
+
+## Issue Details
+
+### Issue Type
+- [ ] Authentication bypass
+- [ ] Authorization flaw
+- [ ] Input validation vulnerability
+- [ ] SQL injection
+- [ ] Cross-site scripting (XSS)
+- [ ] Cross-site request forgery (CSRF)
+- [ ] Insecure direct object reference
+- [ ] Sensitive data exposure
+- [ ] Security misconfiguration
+- [ ] Using components with known vulnerabilities
+- [ ] Insufficient logging and monitoring
+- [ ] Other (please describe below)
+
+### Severity
+- [ ] Critical (CVSS 9.0-10.0) - Remote code execution, privilege escalation, data breach
+- [ ] High (CVSS 7.0-8.9) - Authentication bypass, SQL injection, XSS
+- [ ] Medium (CVSS 4.0-6.9) - Information disclosure, CSRF, denial of service
+- [ ] Low (CVSS 0.1-3.9) - Information leakage, minor validation issues
+
+### Vulnerability Description
+Provide a detailed description of the security vulnerability:
+
+### Affected Components
+Which components are affected?
+- [ ] API Layer
+- [ ] Database Layer
+- [ ] Threat Intelligence Collection
+- [ ] AI/ML Components
+- [ ] Authentication/Authorization
+- [ ] Data Encryption
+- [ ] Configuration Management
+- [ ] Logging/Audit
+- [ ] Deployment Infrastructure
+- [ ] Other (please specify):
+
+## Technical Details
+
+### Environment
+- OS: 
+- Python Version:
+- Project Version:
+- Database Versions:
+- Deployment Method:
+
+### Steps to Reproduce
+1. 
+2. 
+3. 
+
+### Proof of Concept
+Please provide a proof of concept or exploit code (if safe to do so):
+
+### Impact Assessment
+Describe the potential impact:
+- Data confidentiality: 
+- Data integrity: 
+- System availability: 
+- User accounts affected: 
+- Data records at risk: 
+
+### Mitigation
+If you have identified a fix or mitigation, please describe:
+
+### Evidence
+Screenshots, logs, or other evidence of the vulnerability:
+
+## Contact Information
+
+**Your Email** (for coordination): 
+
+**Preferred Communication Method**
+- [ ] Email only
+- [ ] GitHub (for non-sensitive updates)
+- [ ] Other (please specify):
+
+**Disclosure Timeline**
+When can this issue be publicly disclosed?
+
+**Additional Notes**
+Any other relevant information:
+
+---
+
+## For Security Team Use Only
+
+**Assigned Security Analyst:** 
+
+**CVSS Score:** 
+
+**CVE Assignment:** (if applicable)
+
+**Status**
+- [ ] New
+- [ ] Under Investigation
+- [ ] Confirmed
+- [ ] False Positive
+- [ ] Duplicate
+- [ ] Resolved
+
+**Next Steps**
+- [ ] Acknowledge reporter
+- [ ] Request additional information
+- [ ] Confirm vulnerability
+- [ ] Develop fix
+- [ ] Test fix
+- [ ] Deploy fix
+- [ ] Public disclosure
+
+**Timeline**
+- **Discovery Date:** 
+- **Report Date:** 
+- **Acknowledgment Date:** 
+- **Fix Target Date:** 
+- **Disclosure Date:** 
+
+**Related Issues/PRs**
+References to related issues or pull requests: #issue_number
+
+**Lessons Learned**
+- Technical lessons learned:
+- Process improvements needed:
+- Documentation updates needed:
+
+**Public Disclosure**
+- [ ] Planned disclosure date: 
+- [ ] CVE number: 
+- [ ] GitHub Security Advisory created
+- [ ] Notification sent to users
+- [ ] Blog post published

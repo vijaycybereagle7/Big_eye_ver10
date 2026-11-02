@@ -1,0 +1,149 @@
+{
+  "color": {
+    "background": {
+      "pure-black": { "value": "#000000", "type": "color", "description": "OLED-optimized, hero sections, sidebar (Level 0)" },
+      "near-black": { "value": "#0a0a0a", "type": "color", "description": "Main application background (Level 0)" },
+      "dark-surface": { "value": "#141414", "type": "color", "description": "Elevated cards, tool panels, modals (Level 1)" },
+      "hover-surface": { "value": "#1e1e1e", "type": "color", "description": "Hover states, active tabs, tooltips (Level 2)" },
+      "elevated-surface": { "value": "#282828", "type": "color", "description": "Top-level modals, overlays (Level 3)" }
+    },
+    "text": {
+      "primary": { "value": "#e4e4e7", "type": "color", "description": "Primary headings, labels, critical data (15.2:1 AAA)" },
+      "secondary": { "value": "#a1a1aa", "type": "color", "description": "Secondary text, descriptions, metadata (8.9:1 AAA)" },
+      "tertiary": { "value": "#71717a", "type": "color", "description": "Captions, timestamps, disabled states (5.2:1 AA)" },
+      "monospace": { "value": "#d4d4d8", "type": "color", "description": "Code, IP addresses, email headers, hashes (13.8:1 AAA)" }
+    },
+    "threat": {
+      "critical": { "value": "#ef4444", "type": "color", "description": "High risk ≥85%, failed auth, blacklisted (7.8:1 AAA)" },
+      "warning": { "value": "#f59e0b", "type": "color", "description": "Medium risk 75-84%, suspicious patterns (9.2:1 AAA)" },
+      "safe": { "value": "#10b981", "type": "color", "description": "Safe/legitimate 0-74%, passed checks (8.5:1 AAA)" }
+    },
+    "accent": {
+      "primary": { "value": "#3b82f6", "type": "color", "description": "Interactive elements, links, primary CTAs (8.6:1 AAA)" },
+      "hover": { "value": "#60a5fa", "type": "color", "description": "Hover states for interactive elements (10.1:1 AAA)" }
+    },
+    "border": {
+      "subtle": { "value": "rgba(255, 255, 255, 0.1)", "type": "color", "description": "Card borders, dividers, input outlines" },
+      "moderate": { "value": "rgba(255, 255, 255, 0.15)", "type": "color", "description": "Hover borders, active states" },
+      "strong": { "value": "rgba(255, 255, 255, 0.2)", "type": "color", "description": "Focus indicators, emphasized separators" }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": { "value": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", "type": "fontFamily", "description": "UI elements, headings, body text" },
+      "mono": { "value": "'JetBrains Mono', 'Fira Code', monospace", "type": "fontFamily", "description": "Email headers, IP addresses, DNS records, technical data" }
+    },
+    "fontSize": {
+      "hero": { "value": "48px", "type": "dimension", "description": "Hero headlines, Big Eye branding" },
+      "h1": { "value": "36px", "type": "dimension", "description": "Section headers, tool names" },
+      "h2": { "value": "24px", "type": "dimension", "description": "Card titles, subsection headers" },
+      "large": { "value": "18px", "type": "dimension", "description": "Large threat scores, primary metrics" },
+      "body": { "value": "16px", "type": "dimension", "description": "Standard body text, descriptions" },
+      "small": { "value": "14px", "type": "dimension", "description": "Captions, timestamps, metadata" },
+      "code": { "value": "14px", "type": "dimension", "description": "Code blocks, technical data" }
+    },
+    "fontWeight": {
+      "regular": { "value": "400", "type": "number", "description": "Body text, standard UI elements" },
+      "medium": { "value": "500", "type": "number", "description": "Emphasized text (optional)" },
+      "semibold": { "value": "600", "type": "number", "description": "Headings, labels, important text" },
+      "bold": { "value": "700", "type": "number", "description": "Hero text, critical emphasis" }
+    },
+    "lineHeight": {
+      "tight": { "value": "1.1", "type": "number", "description": "Hero headlines" },
+      "snug": { "value": "1.2", "type": "number", "description": "H1 section headers" },
+      "normal": { "value": "1.3", "type": "number", "description": "H2 card titles" },
+      "relaxed": { "value": "1.5", "type": "number", "description": "Body text, small text" },
+      "loose": { "value": "1.6", "type": "number", "description": "Large body text" }
+    },
+    "letterSpacing": {
+      "tight": { "value": "-0.02em", "type": "dimension", "description": "Hero text" },
+      "snug": { "value": "-0.01em", "type": "dimension", "description": "H1 headers" },
+      "normal": { "value": "0", "type": "dimension", "description": "Standard text" },
+      "wide": { "value": "0.01em", "type": "dimension", "description": "Small text, captions" }
+    }
+  },
+  "spacing": {
+    "1": { "value": "4px", "type": "dimension", "description": "Icon padding, tight inline spacing" },
+    "2": { "value": "8px", "type": "dimension", "description": "Element gaps, inline spacing" },
+    "3": { "value": "12px", "type": "dimension", "description": "Compact spacing" },
+    "4": { "value": "16px", "type": "dimension", "description": "Standard element gaps" },
+    "6": { "value": "24px", "type": "dimension", "description": "Card internal spacing" },
+    "8": { "value": "32px", "type": "dimension", "description": "Card padding, section margins" },
+    "10": { "value": "40px", "type": "dimension", "description": "Large card padding" },
+    "12": { "value": "48px", "type": "dimension", "description": "Section spacing" },
+    "16": { "value": "64px", "type": "dimension", "description": "Major section divisions" },
+    "20": { "value": "80px", "type": "dimension", "description": "Hero section padding" }
+  },
+  "borderRadius": {
+    "sm": { "value": "8px", "type": "dimension", "description": "Small buttons, badges, chips" },
+    "md": { "value": "12px", "type": "dimension", "description": "Standard buttons, inputs, small cards" },
+    "lg": { "value": "16px", "type": "dimension", "description": "Large cards, modals, panels" },
+    "full": { "value": "9999px", "type": "dimension", "description": "Circular icons, pills" }
+  },
+  "boxShadow": {
+    "card": { 
+      "value": "0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 12px rgba(0, 0, 0, 0.5)", 
+      "type": "shadow", 
+      "description": "Elevated cards" 
+    },
+    "modal": { 
+      "value": "0 0 0 1px rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.7)", 
+      "type": "shadow", 
+      "description": "Modals, overlays" 
+    },
+    "glow-primary": { 
+      "value": "0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3)", 
+      "type": "shadow", 
+      "description": "Primary button hover, active tabs" 
+    },
+    "glow-critical": { 
+      "value": "0 0 16px rgba(239, 68, 68, 0.6)", 
+      "type": "shadow", 
+      "description": "High-risk score indicators" 
+    },
+    "glow-warning": { 
+      "value": "0 0 16px rgba(245, 158, 11, 0.6)", 
+      "type": "shadow", 
+      "description": "Medium-risk score indicators" 
+    }
+  },
+  "animation": {
+    "duration": {
+      "fast": { "value": "150ms", "type": "duration", "description": "Button hovers, icon state changes" },
+      "standard": { "value": "250ms", "type": "duration", "description": "Card elevations, tab switches" },
+      "slow": { "value": "400ms", "type": "duration", "description": "Modals, side panel animations" }
+    },
+    "easing": {
+      "default": { "value": "ease-out", "type": "cubicBezier", "description": "Standard easing for most transitions" },
+      "sharp": { "value": "cubic-bezier(0.4, 0.0, 0.2, 1)", "type": "cubicBezier", "description": "Sharp, precise animations" }
+    }
+  },
+  "components": {
+    "header": {
+      "height": { "value": "64px", "type": "dimension" }
+    },
+    "tabNav": {
+      "height": { "value": "56px", "type": "dimension" },
+      "activeBorderWidth": { "value": "3px", "type": "dimension" }
+    },
+    "button": {
+      "height": { "value": "48px", "type": "dimension" },
+      "paddingX": { "value": "32px", "type": "dimension" },
+      "minTouchTarget": { "value": "48px", "type": "dimension", "description": "Minimum touch target for mobile accessibility" }
+    },
+    "input": {
+      "height": { "value": "48px", "type": "dimension" },
+      "paddingX": { "value": "16px", "type": "dimension" }
+    },
+    "card": {
+      "paddingDefault": { "value": "32px", "type": "dimension" },
+      "paddingMobile": { "value": "24px", "type": "dimension" }
+    }
+  },
+  "breakpoints": {
+    "mobile": { "value": "640px", "type": "dimension", "description": "Mobile devices" },
+    "tablet": { "value": "768px", "type": "dimension", "description": "Tablet devices" },
+    "desktop": { "value": "1024px", "type": "dimension", "description": "Desktop screens" },
+    "large": { "value": "1440px", "type": "dimension", "description": "Large desktop screens" }
+  }
+}

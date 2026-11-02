@@ -1,0 +1,217 @@
+# CODEOWNERS file for the Cybersecurity Database System
+# 
+# This file establishes code ownership and review requirements.
+# Each line is a rule pattern followed by one or more owners.
+# 
+# The pattern matching follows the same rules used in gitignore files.
+# Order is meaningful; the last matching pattern takes precedence.
+# 
+# For more information, see:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - these people will be reviewers for everything
+* @maintainer-username @security-team-lead
+
+# API Layer - FastAPI application
+/api/ @api-team-lead @security-team @maintainer-username
+/api/main.py @api-team-lead
+/api/app/ @api-team-lead
+/api/routers/ @api-team-lead
+/api/models/ @api-team-lead
+/api/services/ @api-team-lead
+/api/middleware/ @security-team
+/api/tests/ @qa-team-lead
+
+# Database Layer - Database models and connections
+/database/ @database-team-lead @maintainer-username
+/database/postgresql/ @database-team-lead
+/database/mongodb/ @database-team-lead
+/database/connections.py @database-team-lead
+/database/migrations/ @database-team-lead
+
+# Threat Intelligence - Collection and processing
+/threat_intelligence/ @threat-intel-team-lead @security-team
+/threat_intelligence/collection/ @threat-intel-team-lead
+/threat_intelligence/processing/ @threat-intel-team-lead
+/threat_intelligence/api_integrations/ @threat-intel-team-lead
+
+# AI/ML Components - Machine learning and AI features
+/ai_ml/ @ml-team-lead @data-science-team
+/ai_ml/anomaly_detection/ @ml-team-lead
+/ai_ml/nlp/ @ml-team-lead @data-science-team
+/ai_ml/pattern_recognition/ @ml-team-lead
+/ai_ml/models/ @ml-team-lead
+/ai_ml/training/ @ml-team-lead @data-science-team
+
+# Security Module - Security-related code
+/security/ @security-team @security-team-lead
+/security/authentication/ @security-team
+/security/authorization/ @security-team
+/security/encryption/ @security-team
+/security/compliance/ @security-team @legal-team
+/security/audit/ @security-team
+
+# Performance Module - Performance optimization
+/performance/ @performance-team-lead @devops-team
+/performance/database/ @performance-team-lead @database-team-lead
+/performance/api/ @performance-team-lead @api-team-lead
+/performance/caching/ @performance-team-lead
+
+# Testing - Test code and configurations
+/testing/ @qa-team-lead @maintainer-username
+/testing/unit/ @qa-team-lead
+/testing/integration/ @qa-team-lead @devops-team
+/testing/load/ @performance-team-lead
+/testing/fixtures/ @qa-team-lead
+
+# Monitoring - Observability and monitoring
+/monitoring/ @devops-team @sre-team
+/monitoring/prometheus/ @sre-team
+/monitoring/grafana/ @sre-team
+/monitoring/logging/ @sre-team
+/monitoring/alerting/ @sre-team @security-team
+
+# Deployment - Deployment configurations and scripts
+/deployment/ @devops-team @sre-team
+/deployment/docker/ @devops-team
+/deployment/kubernetes/ @devops-team @sre-team
+/deployment/terraform/ @devops-team
+/deployment/scripts/ @devops-team
+/deployment/config/ @devops-team
+
+# Documentation - Documentation and guides
+/docs/ @documentation-team @maintainer-username
+/docs/api/ @documentation-team @api-team-lead
+/docs/architecture/ @architecture-team @maintainer-username
+/docs/deployment/ @documentation-team @devops-team
+/docs/security/ @documentation-team @security-team
+/docs/operations/ @documentation-team @sre-team
+
+# Configuration files - Infrastructure and application configuration
+/*.yml @maintainer-username @devops-team
+/*.yaml @maintainer-username @devops-team
+/*.json @maintainer-username
+/.env* @maintainer-username @security-team
+/docker-compose* @devops-team
+/Dockerfile @devops-team @security-team
+
+# CI/CD - GitHub Actions and workflows
+/.github/ @devops-team @maintainer-username
+/.github/workflows/ @devops-team
+/.github/ISSUE_TEMPLATE/ @maintainer-username @documentation-team
+/.github/PULL_REQUEST_TEMPLATE.md @maintainer-username @documentation-team
+
+# Root level configuration
+/requirements.txt @maintainer-username @api-team-lead
+/setup.py @maintainer-username
+/pyproject.toml @maintainer-username
+/pytest.ini @qa-team-lead
+/tox.ini @qa-team-lead
+
+# License and legal
+/LICENSE @legal-team @maintainer-username
+/SECURITY.md @security-team @documentation-team
+/CODE_OF_CONDUCT.md @maintainer-username @hr-team
+/CONTRIBUTING.md @documentation-team @maintainer-username
+
+# Changelog and releases
+/CHANGELOG.md @maintainer-username @documentation-team
+/RELEASE_PROCESS.md @maintainer-username @devops-team
+
+# Security policies
+/SECURITY.md @security-team @legal-team
+/SECURITY_POLICY.md @security-team @legal-team
+/THREAT_MODEL.md @security-team @architecture-team
+
+# Architecture and design
+/ARCHITECTURE.md @architecture-team @maintainer-username
+/DESIGN.md @architecture-team @maintainer-username
+/ADR/ @architecture-team
+
+# Compliance
+/compliance/ @legal-team @security-team
+/compliance/gdpr/ @legal-team
+/compliance/sox/ @legal-team
+/compliance/hipaa/ @legal-team @security-team
+
+# Browser integration
+/browser/ @frontend-team @security-team
+/browser/extension/ @security-team
+/browser/global_browser.py @frontend-team
+
+# Code generation and automation
+/code/ @automation-team @devops-team
+/scripts/ @devops-team @maintainer-username
+
+# Temporary and build directories (no owners needed)
+/tmp/ 
+/build/
+/dist/
+/*.egg-info/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Sensitive files (should be reviewed by security team)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Note: The last matching pattern takes precedence, so:
+# - Global rules are at the top
+# - Specific rules are in the middle
+# - Catch-all patterns are at the bottom
+
+# Special review requirements for sensitive areas
+*.sql @database-team-lead @security-team
+*.js @frontend-team @security-team
+*.ts @frontend-team @security-team
+*.yaml @devops-team @security-team
+*.yml @devops-team @security-team
+Dockerfile* @devops-team @security-team
+docker-compose* @devopsteam @security-team
+
+# Security-critical files require security team review
+/security* @security-team
+/*security* @security-team
+*_security* @security-team
+
+# Database migration files require database team review
+*migrations* @database-team-lead
+*migrate* @database-team-lead
+
+# API changes require API team review
+*api* @api-team-lead
+*endpoint* @api-team-lead
+
+# Performance-critical changes require performance team review
+*performance* @performance-team-lead
+*optimization* @performance-team-lead
+*benchmark* @performance-team-lead
+
+# Documentation changes require documentation team review
+*README* @documentation-team
+*doc* @documentation-team
+*guide* @documentation-team
+*manual* @documentation-team
+
+# Test changes require QA team review
+*test* @qa-team-lead
+*spec* @qa-team-lead
+*fixture* @qa-team-lead

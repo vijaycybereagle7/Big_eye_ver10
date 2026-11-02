@@ -1,0 +1,259 @@
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@cybersecurity-api.com'
+  smtp_auth_username: 'alerts@cybersecurity-api.com'
+  smtp_auth_password: 'your_smtp_password'
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default'
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      repeat_interval: 5m
+
+    # Warning alerts - scheduled notification
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 5m
+      repeat_interval: 2h
+
+    # Database alerts
+    - match:
+        service: postgresql
+      receiver: 'database-team'
+      group_wait: 30s
+      repeat_interval: 30m
+
+    - match:
+        service: mongodb
+      receiver: 'database-team'
+      group_wait: 30s
+      repeat_interval: 30m
+
+    # API alerts
+    - match:
+        service: api
+      receiver: 'backend-team'
+      group_wait: 2m
+      repeat_interval: 1h
+
+    # Threat intelligence alerts
+    - match:
+        service: threat-intelligence
+      receiver: 'threat-intel-team'
+      group_wait: 2m
+      repeat_interval: 30m
+
+    # Security alerts
+    - match:
+        service: security
+      receiver: 'security-team'
+      group_wait: 30s
+      repeat_interval: 15m
+
+# Inhibition rules
+inhibit_rules:
+  # Inhibit warning alerts if critical alert is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+  # Inhibit service alerts if the service is completely down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+
+# Receivers configuration
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'admin@cybersecurity-api.com'
+        subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }} - {{ .Name }} = {{ .Value }}{{ end }}
+          {{ end }}
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'oncall@cybersecurity-api.com'
+        subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **CRITICAL ALERT**
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: '{{ .Global.slack_api_url }}'
+        channel: '#critical-alerts'
+        title: '🚨 Critical Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+
+    # Webhook for PagerDuty integration
+    webhook_configs:
+      - url: 'http://pagerduty-webhook:9090/alert'
+        send_resolved: false
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'team@cybersecurity-api.com'
+        subject: '⚠️ Warning: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **WARNING**
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: '{{ .Global.slack_api_url }}'
+        channel: '#general'
+        title: '⚠️ Warning Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+
+  - name: 'database-team'
+    email_configs:
+      - to: 'dba-team@cybersecurity-api.com'
+        subject: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **DATABASE ALERT**
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Database: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: '{{ .Global.slack_api_url }}'
+        channel: '#database'
+        title: '🗄️ Database Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+  - name: 'backend-team'
+    email_configs:
+      - to: 'backend-team@cybersecurity-api.com'
+        subject: '🔧 Backend Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **BACKEND ALERT**
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: '{{ .Global.slack_api_url }}'
+        channel: '#backend'
+        title: '🔧 Backend Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+  - name: 'threat-intel-team'
+    email_configs:
+      - to: 'threat-intel-team@cybersecurity-api.com'
+        subject: '🛡️ Threat Intelligence Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **THREAT INTELLIGENCE ALERT**
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Feed: {{ .Labels.feed_name }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: '{{ .Global.slack_api_url }}'
+        channel: '#threat-intelligence'
+        title: '🛡️ Threat Intelligence Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Feed: {{ .Labels.feed_name }}
+          {{ end }}
+
+  - name: 'security-team'
+    email_configs:
+      - to: 'security-team@cybersecurity-api.com'
+        subject: '🔒 Security Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **SECURITY ALERT**
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Endpoint: {{ .Labels.endpoint }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: '{{ .Global.slack_api_url }}'
+        channel: '#security'
+        title: '🔒 Security Alert'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Endpoint: {{ .Labels.endpoint }}
+          {{ end }}
+
+# Time intervals for notification scheduling
+time_intervals:
+  - name: 'business-hours'
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '17:00'
+        weekdays: ['monday:friday']
+
+  - name: 'after-hours'
+    time_intervals:
+      - times:
+          - start_time: '17:00'
+            end_time: '09:00'
+        weekdays: ['monday:friday']
+      - times:
+          - start_time: '00:00'
+            end_time: '23:59'
+        weekdays: ['saturday', 'sunday']

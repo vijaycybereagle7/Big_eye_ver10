@@ -1,0 +1,118 @@
+---
+name: Bug Report
+about: Create a report to help us improve
+title: '[BUG] '
+labels: 'bug'
+assignees: ''
+
+---
+
+**Describe the bug**
+A clear and concise description of what the bug is.
+
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Go to '...'
+2. Click on '....'
+3. Scroll down to '....'
+4. See error
+
+**Expected behavior**
+A clear and concise description of what you expected to happen.
+
+**Screenshots**
+If applicable, add screenshots to help explain your problem.
+
+**Environment:**
+ - OS: [e.g. Ubuntu 20.04, Windows 10, macOS Big Sur]
+ - Python Version: [e.g. 3.9.5]
+ - Docker Version: [e.g. 20.10.7]
+ - Project Version: [e.g. 2.1.0]
+ - Deployment Method: [e.g. Docker Compose, Kubernetes, AWS]
+
+**Additional context**
+Add any other context about the problem here.
+
+**System Information**
+Run this command and paste the output:
+```bash
+python -c "import sys; print('Python:', sys.version)"
+docker --version
+docker-compose --version
+```
+
+**Database Information**
+What databases are you using?
+- [ ] PostgreSQL (version: )
+- [ ] MongoDB (version: )
+- [ ] Redis (version: )
+
+**Threat Intelligence Sources**
+Which threat intelligence sources are configured?
+- [ ] AbuseIPDB
+- [ ] GreyNoise
+- [ ] OTX (AlienVault)
+- [ ] VirusTotal
+- [ ] Shodan
+- [ ] SecurityTrails
+- [ ] PhishTank
+- [ ] URLhaus
+- [ ] Spamhaus
+- [ ] Safe Browsing
+- [ ] MalwareBazaar
+- [ ] CIRCL Hash Lookup
+
+**Error Logs**
+Please include relevant error logs from:
+- Application logs: 
+- Database logs:
+- Docker logs: `docker-compose logs [service-name]`
+
+**Configuration**
+Please describe your configuration (remove sensitive information):
+```bash
+# Environment variables (sanitized)
+DATABASE_URL=postgresql://***
+MONGO_URI=mongodb://***
+REDIS_URL=redis://***
+API_HOST=***
+API_PORT=***
+
+# Configuration files (sanitized)
+# Please describe relevant config sections
+```
+
+---
+
+## For Internal Use Only
+
+**Priority**
+- [ ] Low - Minor inconvenience
+- [ ] Medium - Affects some users
+- [ ] High - Affects many users
+- [ ] Critical - System down or major security issue
+
+**Component**
+- [ ] API Layer
+- [ ] Database Layer
+- [ ] Threat Intelligence Collection
+- [ ] AI/ML Components
+- [ ] Security Module
+- [ ] Documentation
+- [ ] Deployment
+- [ ] Monitoring
+- [ ] Testing
+
+**Difficulty**
+- [ ] Easy - Simple fix
+- [ ] Medium - Requires investigation
+- [ ] Hard - Complex issue
+- [ ] Unknown - Need more information
+
+**Reproducible**
+- [ ] Yes - Can be reproduced consistently
+- [ ] No - Intermittent issue
+- [ ] Unknown - Need to investigate
+
+**Related Issues**
+References to related issues: #issue_number

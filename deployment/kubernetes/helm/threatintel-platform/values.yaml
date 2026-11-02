@@ -1,0 +1,475 @@
+# Default values for Threat Intelligence Platform
+# This is a YAML-formatted file.
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# PostgreSQL Configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "your_secure_postgres_password_here"
+    database: "threatintel"
+    username: "threatintel_user"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "fast-ssd"
+      size: 100Gi
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1
+      requests:
+        memory: 1Gi
+        cpu: 500m
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9187"
+    extendedConfiguration: |
+      max_connections = 200
+      shared_buffers = 512MB
+      effective_cache_size = 1GB
+      wal_level = replica
+      archive_mode = on
+      archive_command = 'cp %p /wal_archive/%f'
+      checkpoint_completion_target = 0.7
+      checkpoint_timeout = 10min
+      max_wal_size = 2GB
+      min_wal_size = 512MB
+  volumePermissions:
+    enabled: true
+
+# MongoDB Configuration
+mongodb:
+  enabled: true
+  auth:
+    enabled: true
+    rootPassword: "your_secure_mongo_password_here"
+    database: "threatintel_logs"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "fast-ssd"
+      size: 50Gi
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1
+      requests:
+        memory: 1Gi
+        cpu: 500m
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9216"
+  volumePermissions:
+    enabled: true
+
+# Redis Configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "your_secure_redis_password_here"
+  master:
+    persistence:
+      enabled: true
+      storageClass: "standard"
+      size: 20Gi
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 250m
+      requests:
+        memory: 256Mi
+        cpu: 125m
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9121"
+  replica:
+    enabled: true
+    replicaCount: 2
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 250m
+      requests:
+        memory: 256Mi
+        cpu: 125m
+
+# FastAPI Application
+fastapi:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: threatintel/fastapi-app
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+
+  podSecurityContext:
+    fsGroup: 1001
+
+  securityContext:
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1001
+
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: threatintel.yourdomain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: threatintel-tls
+        hosts:
+          - threatintel.yourdomain.com
+
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 500m
+    requests:
+      memory: 512Mi
+      cpu: 250m
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  env:
+    DATABASE_URL: "postgresql://threatintel_user:your_secure_postgres_password_here@postgresql:5432/threatintel"
+    REDIS_URL: "redis://:your_secure_redis_password_here@redis-master:6379/0"
+    MONGO_URI: "mongodb://root:your_secure_mongo_password_here@mongodb:27017/threatintel_logs?authSource=admin"
+    ENVIRONMENT: "production"
+    SECRET_KEY: "your_very_secure_secret_key_here_minimum_32_characters"
+
+# Celery Worker
+celeryWorker:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: threatintel/fastapi-app
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9545"
+
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 500m
+    requests:
+      memory: 512Mi
+      cpu: 250m
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  env:
+    CELERY_WORKER_CONCURRENCY: "4"
+    CELERY_WORKER_MAX_TASKS_PER_CHILD: "1000"
+
+# Celery Beat (Scheduler)
+celeryBeat:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: threatintel/fastapi-app
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 250m
+    requests:
+      memory: 256Mi
+      cpu: 125m
+
+  env:
+    CELERY_BEAT_SCHEDULE_FILE: "/app/celerybeat-schedule"
+
+# Load Balancer (Nginx)
+nginx:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: nginx
+    pullPolicy: IfNotPresent
+    tag: "alpine"
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9113"
+
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 80
+
+  resources:
+    limits:
+      memory: 256Mi
+      cpu: 250m
+    requests:
+      memory: 128Mi
+      cpu: 125m
+
+  config:
+    upstream: |
+      upstream backend {
+          server fastapi:8000;
+      }
+
+# Prometheus Configuration
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      enabled: true
+      storageClass: "standard"
+      size: 20Gi
+    retention: "30d"
+    resources:
+      limits:
+        memory: 1Gi
+        cpu: 500m
+      requests:
+        memory: 512Mi
+        cpu: 250m
+    extraScrapeConfigs: |
+      - job_name: 'fastapi-app'
+        static_configs:
+          - targets: ['fastapi:8000']
+        metrics_path: /metrics
+        scrape_interval: 30s
+      - job_name: 'celery-worker'
+        static_configs:
+          - targets: ['celery-worker:9545']
+        metrics_path: /metrics
+        scrape_interval: 30s
+
+# Grafana Configuration
+grafana:
+  enabled: true
+  adminPassword: "your_secure_grafana_password_here"
+  persistence:
+    enabled: true
+    storageClassName: "standard"
+    size: 10Gi
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 250m
+    requests:
+      memory: 256Mi
+      cpu: 125m
+  plugins:
+    - grafana-clock-panel
+    - grafana-simple-json-datasource
+
+# Elasticsearch Configuration
+elasticsearch:
+  enabled: true
+  replicas: 1
+  minimumMasterNodes: 1
+  esConfig:
+    elasticsearch.yml: |
+      cluster.name: threatintel-es
+      node.name: es-node-1
+      discovery.type: single-node
+      xpack.security.enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 2Gi
+    limits:
+      cpu: 500m
+      memory: 2Gi
+  volumeClaimTemplate:
+    accessModes: ["ReadWriteOnce"]
+    storageClassName: "fast-ssd"
+    resources:
+      requests:
+        storage: 20Gi
+
+# Kibana Configuration
+kibana:
+  enabled: true
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Alertmanager Configuration
+alertmanager:
+  enabled: true
+  config:
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@threatintel.com'
+    route:
+      group_by: ['alertname']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'web.hook'
+    receivers:
+      - name: 'web.hook'
+        webhook_configs:
+          - url: 'http://fastapi:8000/webhooks/alerts'
+
+# Backup Configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: 30
+  s3:
+    bucket: "threatintel-backups"
+    region: "us-west-2"
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 250m
+    requests:
+      memory: 256Mi
+      cpu: 125m
+
+# Monitoring and Alerting
+monitoring:
+  enabled: true
+  prometheusRule:
+    enabled: true
+    namespace: ""
+    additionalLabels: {}
+    rules:
+      critical:
+        - alert: InstanceDown
+          expr: up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Instance is down"
+      warning:
+        - alert: HighCPUUsage
+          expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage"
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+    rules:
+      - from:
+          - podSelector:
+              matchLabels:
+                app: threatintel
+        ports:
+          - protocol: TCP
+            port: 8000
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Service Monitor for Prometheus Operator
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
+  port: metrics
+
+# Horizontal Pod Autoscaler
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: threatintel.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: threatintel-tls
+      hosts:
+        - threatintel.yourdomain.com
+
+# Additional configuration
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Security context
+securityContext:
+  fsGroup: 1001
+  runAsUser: 1001
+  runAsNonRoot: true
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "metrics"

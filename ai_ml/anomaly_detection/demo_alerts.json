@@ -1,0 +1,18 @@
+{
+  "alert_history": [],
+  "active_alerts": {},
+  "config": {
+    "severity_thresholds": {
+      "critical": 0.9,
+      "high": 0.8,
+      "medium": 0.7,
+      "low": 0.6
+    },
+    "alert_cooldown": 60,
+    "notification_channels": [
+      "log",
+      "console"
+    ]
+  },
+  "timestamp": "2025-10-30T05:26:10.970168"
+}

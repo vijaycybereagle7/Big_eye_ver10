@@ -1,0 +1,26 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# JavaScript tooling
+**/node_modules/
+**/.pnpm-store/
+**/.vite/
+**/dist/
+**/.next/
+**/coverage/
+**/npm-debug.log*
+**/pnpm-debug.log*
+
+# Python tooling
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+
+# Generated screenshots and local artifacts
+.browser_screenshots/
+**/.DS_Store

@@ -1,0 +1,325 @@
+# PostgreSQL Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    component: backup
+    database: postgresql
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            component: backup
+            database: postgresql
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: postgres-backup
+            image: postgres:15
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Starting PostgreSQL backup"
+              
+              # Set variables
+              BACKUP_DIR="/backup"
+              S3_BUCKET="threatintel-backups"
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              
+              # Create backup directory
+              mkdir -p "$BACKUP_DIR"
+              
+              # Create base backup
+              pg_basebackup -h postgresql -U threatintel_user -D "$BACKUP_DIR/postgres_$TIMESTAMP" -Ft -z -P
+              
+              # Create SQL dump
+              pg_dump -h postgresql -U threatintel_user -d threatintel --verbose --format=custom --compress=9 --file="$BACKUP_DIR/pgdump_$TIMESTAMP.custom"
+              
+              # Compress
+              tar -czf "$BACKUP_DIR/postgres_base_$TIMESTAMP.tar.gz" -C "$BACKUP_DIR" "postgres_$TIMESTAMP"
+              
+              # Upload to S3
+              if [ -n "$AWS_BUCKET" ]; then
+                aws s3 cp "$BACKUP_DIR/postgres_base_$TIMESTAMP.tar.gz" "s3://$S3_BUCKET/postgres/base/"
+                aws s3 cp "$BACKUP_DIR/pgdump_$TIMESTAMP.custom" "s3://$S3_BUCKET/postgres/daily/"
+              fi
+              
+              # Cleanup old backups (keep 7 days)
+              find "$BACKUP_DIR" -name "postgres_*" -mtime +7 -delete
+              
+              echo "PostgreSQL backup completed"
+            env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: postgres-password
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-secret-access-key
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+          volumes:
+          - name: backup-storage
+            emptyDir:
+              sizeLimit: 50Gi
+---
+# MongoDB Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  labels:
+    component: backup
+    database: mongodb
+spec:
+  schedule: "30 2 * * *"  # Daily at 2:30 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            component: backup
+            database: mongodb
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: mongodb-backup
+            image: mongo:7.0
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Starting MongoDB backup"
+              
+              # Set variables
+              BACKUP_DIR="/backup"
+              S3_BUCKET="threatintel-backups"
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              
+              # Create backup directory
+              mkdir -p "$BACKUP_DIR"
+              
+              # Create database backup
+              mongodump --host mongodb --port 27017 \
+                --username root --password "$MONGO_ROOT_PASSWORD" \
+                --authenticationDatabase admin \
+                --db threatintel_logs --out="$BACKUP_DIR/mongodb_$TIMESTAMP"
+              
+              # Create oplog backup
+              mongodump --host mongodb --port 27017 \
+                --username root --password "$MONGO_ROOT_PASSWORD" \
+                --authenticationDatabase admin \
+                --oplog --out="$BACKUP_DIR/oplog_$TIMESTAMP"
+              
+              # Compress backups
+              tar -czf "$BACKUP_DIR/mongodb_backup_$TIMESTAMP.tar.gz" -C "$BACKUP_DIR" "mongodb_$TIMESTAMP"
+              tar -czf "$BACKUP_DIR/oplog_backup_$TIMESTAMP.tar.gz" -C "$BACKUP_DIR" "oplog_$TIMESTAMP"
+              
+              # Upload to S3
+              if [ -n "$AWS_BUCKET" ]; then
+                aws s3 cp "$BACKUP_DIR/mongodb_backup_$TIMESTAMP.tar.gz" "s3://$S3_BUCKET/mongodb/daily/"
+                aws s3 cp "$BACKUP_DIR/oplog_backup_$TIMESTAMP.tar.gz" "s3://$S3_BUCKET/mongodb/oplog/"
+              fi
+              
+              # Cleanup old backups (keep 7 days)
+              find "$BACKUP_DIR" -name "mongodb_*" -mtime +7 -delete
+              find "$BACKUP_DIR" -name "oplog_*" -mtime +7 -delete
+              
+              echo "MongoDB backup completed"
+            env:
+            - name: MONGO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: mongo-root-password
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-secret-access-key
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+          volumes:
+          - name: backup-storage
+            emptyDir:
+              sizeLimit: 30Gi
+---
+# Redis Backup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  labels:
+    component: backup
+    database: redis
+spec:
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            component: backup
+            database: redis
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: redis-backup
+            image: redis:7.2-alpine
+            command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Starting Redis backup"
+              
+              # Set variables
+              BACKUP_DIR="/backup"
+              S3_BUCKET="threatintel-backups"
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              
+              # Trigger BGSAVE
+              redis-cli -h redis -a "$REDIS_PASSWORD" BGSAVE
+              
+              # Wait for save to complete
+              while [ "$(redis-cli -h redis -a "$REDIS_PASSWORD" LASTSAVE)" = "$(redis-cli -h redis -a "$REDIS_PASSWORD" LASTSAVE)" ]; do
+                sleep 2
+              done
+              
+              # Copy dump file
+              DUMP_FILE=$(redis-cli -h redis -a "$REDIS_PASSWORD" CONFIG GET dir | tail -1)/dump.rdb
+              cp "$DUMP_FILE" "$BACKUP_DIR/redis_$TIMESTAMP.rdb"
+              
+              # Get Redis info
+              redis-cli -h redis -a "$REDIS_PASSWORD" INFO > "$BACKUP_DIR/redis_info_$TIMESTAMP.txt"
+              
+              # Compress
+              gzip "$BACKUP_DIR/redis_$TIMESTAMP.rdb"
+              gzip "$BACKUP_DIR/redis_info_$TIMESTAMP.txt"
+              
+              # Upload to S3
+              if [ -n "$AWS_BUCKET" ]; then
+                aws s3 cp "$BACKUP_DIR/redis_$TIMESTAMP.rdb.gz" "s3://$S3_BUCKET/redis/"
+                aws s3 cp "$BACKUP_DIR/redis_info_$TIMESTAMP.txt.gz" "s3://$S3_BUCKET/redis/"
+              fi
+              
+              # Cleanup old backups (keep 7 days)
+              find "$BACKUP_DIR" -name "redis_*" -mtime +7 -delete
+              
+              echo "Redis backup completed"
+            env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: redis-password
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-secret-access-key
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+          volumes:
+          - name: backup-storage
+            emptyDir:
+              sizeLimit: 10Gi
+---
+# Backup Cleanup CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-cleanup
+  labels:
+    component: cleanup
+spec:
+  schedule: "0 4 * * 0"  # Weekly on Sunday at 4 AM
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            component: cleanup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup-backup
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting backup cleanup"
+              
+              # Set variables
+              S3_BUCKET="threatintel-backups"
+              RETENTION_DAYS=30
+              
+              # Cleanup S3 backups
+              for prefix in postgres mongodb redis; do
+                aws s3 ls "s3://$S3_BUCKET/$prefix/" | while read -r line; do
+                  fileDate=$(echo $line | awk '{print $1" "$2}')
+                  fileDateSec=$(date -d "$fileDate" +%s)
+                  thresholdSec=$(date -d "$RETENTION_DAYS days ago" +%s)
+                  
+                  if [ $fileDateSec -lt $thresholdSec ]; then
+                    fileName=$(echo $line | awk '{print $4}')
+                    echo "Deleting old backup: $fileName"
+                    aws s3 rm "s3://$S3_BUCKET/$prefix/$fileName"
+                  fi
+                done
+              done
+              
+              echo "Backup cleanup completed"
+            env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threatintel-secrets
+                  key: aws-secret-access-key
+            - name: AWS_BUCKET
+              value: "threatintel-backups"
+            - name: RETENTION_DAYS
+              value: "30"

@@ -1,0 +1,305 @@
+# Prometheus Alert Rules for Threat Intelligence Platform
+# Comprehensive monitoring with severity levels
+
+groups:
+  - name: threatintel.rules
+    rules:
+      # Critical Infrastructure Alerts
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "{{ $labels.job }} instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      # Database Alerts
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+          component: postgresql
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance is not responding"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+          component: postgresql
+        annotations:
+          summary: "PostgreSQL has too many connections"
+          description: "PostgreSQL instance has {{ $value }} connections, which is more than 80% of max_connections"
+
+      - alert: PostgreSQLSlowQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+          component: postgresql
+        annotations:
+          summary: "PostgreSQL has slow queries"
+          description: "PostgreSQL has queries running for more than 5 minutes"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag > 100
+        for: 5m
+        labels:
+          severity: critical
+          service: database
+          component: postgresql
+        annotations:
+          summary: "PostgreSQL replication lag is high"
+          description: "PostgreSQL replication lag is {{ $value }} seconds"
+
+      # MongoDB Alerts
+      - alert: MongoDBDown
+        expr: mongodb_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+          component: mongodb
+        annotations:
+          summary: "MongoDB is down"
+          description: "MongoDB instance is not responding"
+
+      - alert: MongoDBHighConnections
+        expr: mongodb_connections{state="current"} / mongodb_connections{state="available"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+          component: mongodb
+        annotations:
+          summary: "MongoDB has high connection usage"
+          description: "MongoDB connection usage is {{ $value }}%"
+
+      # Redis Alerts
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+          component: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance is not responding"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+          component: redis
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+          component: redis
+        annotations:
+          summary: "Redis rejected connections"
+          description: "Redis rejected {{ $value }} connections in the last 5 minutes"
+
+      # Application Alerts
+      - alert: FastAPIDown
+        expr: up{job="fastapi-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+          component: application
+        annotations:
+          summary: "FastAPI application is down"
+          description: "FastAPI application instance is not responding"
+
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="fastapi-app"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          component: application
+        annotations:
+          summary: "API response time is high"
+          description: "95th percentile response time is {{ $value }}s"
+
+      - alert: HighAPIErrorRate
+        expr: rate(http_requests_total{job="fastapi-app",status=~"5.."}[5m]) / rate(http_requests_total{job="fastapi-app"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+          component: application
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }}"
+
+      # Celery Worker Alerts
+      - alert: CeleryWorkerDown
+        expr: up{job="celery-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: worker
+          component: celery
+        annotations:
+          summary: "Celery worker is down"
+          description: "Celery worker instance is not responding"
+
+      - alert: CeleryQueueBacklog
+        expr: celery_queue_length > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: worker
+          component: celery
+        annotations:
+          summary: "Celery queue has high backlog"
+          description: "Celery queue {{ $labels.queue }} has {{ $value }} pending tasks"
+
+      # System Alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage on {{ $labels.instance }} is {{ $value }}%"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage on {{ $labels.instance }} is {{ $value }}%"
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "Disk space is low"
+          description: "Disk usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} is {{ $value }}%"
+
+      - alert: DiskSpaceCritical
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Disk space is critical"
+          description: "Disk usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} is {{ $value }}%"
+
+      # Container Alerts
+      - alert: ContainerHighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container {{ $labels.name }} has high CPU usage"
+          description: "Container CPU usage is {{ $value }}%"
+
+      - alert: ContainerHighMemoryUsage
+        expr: container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container {{ $labels.name }} has high memory usage"
+          description: "Container memory usage is {{ $value }}%"
+
+      # Load Balancer Alerts
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: loadbalancer
+          component: nginx
+        annotations:
+          summary: "Nginx is down"
+          description: "Nginx load balancer is not responding"
+
+      - alert: HighNginxErrorRate
+        expr: rate(nginx_http_requests_total{status=~"4.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: loadbalancer
+          component: nginx
+        annotations:
+          summary: "High Nginx 4xx error rate"
+          description: "Nginx 4xx error rate is {{ $value | humanizePercentage }}"
+
+      - alert: HighNginx5xxErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: loadbalancer
+          component: nginx
+        annotations:
+          summary: "High Nginx 5xx error rate"
+          description: "Nginx 5xx error rate is {{ $value | humanizePercentage }}"
+
+      # ELK Stack Alerts
+      - alert: ElasticsearchDown
+        expr: up{job="elasticsearch"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: monitoring
+          component: elasticsearch
+        annotations:
+          summary: "Elasticsearch is down"
+          description: "Elasticsearch instance is not responding"
+
+      - alert: ElasticsearchHighClusterStatus
+        expr: elasticsearch_cluster_health_status{color="red"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: monitoring
+          component: elasticsearch
+        annotations:
+          summary: "Elasticsearch cluster health is red"
+          description: "Elasticsearch cluster {{ $labels.cluster }} has red status"
+
+      - alert: KibanaDown
+        expr: up{job="kibana"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: monitoring
+          component: kibana
+        annotations:
+          summary: "Kibana is down"
+          description: "Kibana instance is not responding"

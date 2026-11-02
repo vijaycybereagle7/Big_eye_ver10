@@ -1,0 +1,522 @@
+version: '3.8'
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  backend-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+  database-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+  monitoring-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
+
+volumes:
+  postgres_timescaledb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/postgres_timescaledb
+  mongodb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/mongodb
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/redis
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/prometheus
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/grafana
+  elasticsearch_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/elasticsearch
+  kibana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/kibana
+  logstash_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/data/logstash
+  nginx_logs:
+    driver: local
+  backup_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/backups
+
+services:
+  # Database Services
+  postgres-timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: postgres-timescaledb
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-threatintel}
+      POSTGRES_USER: ${POSTGRES_USER:-threatintel_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGUSER: postgres
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_timescaledb_data:/var/lib/postgresql/data
+      - ./backup/wal_archive:/wal_archive
+      - ./config/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./config/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    networks:
+      database-network:
+        ipv4_address: 172.22.10.10
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-threatintel_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-threatintel_logs}
+    volumes:
+      - mongodb_data:/data/db
+      - ./config/mongodb/mongod.conf:/etc/mongod.conf
+      - ./backup/mongodb:/backup
+    networks:
+      database-network:
+        ipv4_address: 172.22.10.20
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_MAXMEMORY: 1gb
+      REDIS_MAXMEMORY_POLICY: allkeys-lru
+    volumes:
+      - redis_data:/data
+      - ./config/redis/redis.conf:/etc/redis/redis.conf
+    command: redis-server /etc/redis/redis.conf
+    networks:
+      database-network:
+        ipv4_address: 172.22.10.30
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # Application Services
+  fastapi-app:
+    build:
+      context: ../../api
+      dockerfile: Dockerfile
+    container_name: fastapi-app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-threatintel_user}:${POSTGRES_PASSWORD}@postgres-timescaledb:5432/${POSTGRES_DB:-threatintel}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_INITDB_DATABASE:-threatintel_logs}?authSource=admin
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      SECRET_KEY: ${SECRET_KEY}
+    volumes:
+      - ../../api:/app
+      - nginx_logs:/var/log/nginx
+    networks:
+      app-network:
+        ipv4_address: 172.20.10.10
+      backend-network:
+        ipv4_address: 172.21.10.10
+    depends_on:
+      postgres-timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  celery-worker:
+    build:
+      context: ../../api
+      dockerfile: Dockerfile
+    container_name: celery-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-threatintel_user}:${POSTGRES_PASSWORD}@postgres-timescaledb:5432/${POSTGRES_DB:-threatintel}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_INITDB_DATABASE:-threatintel_logs}?authSource=admin
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - ../../api:/app
+    command: celery -A app.celery worker --loglevel=info --concurrency=4
+    networks:
+      backend-network:
+        ipv4_address: 172.21.10.20
+    depends_on:
+      postgres-timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  celery-beat:
+    build:
+      context: ../../api
+      dockerfile: Dockerfile
+    container_name: celery-beat
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-threatintel_user}:${POSTGRES_PASSWORD}@postgres-timescaledb:5432/${POSTGRES_DB:-threatintel}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_INITDB_DATABASE:-threatintel_logs}?authSource=admin
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - ../../api:/app
+    command: celery -A app.celery beat --loglevel=info
+    networks:
+      backend-network:
+        ipv4_address: 172.21.10.30
+    depends_on:
+      postgres-timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.125'
+
+  # Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+    networks:
+      app-network:
+        ipv4_address: 172.20.10.100
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - fastapi-app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.125'
+
+  # Monitoring Services
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.10
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.20
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.125'
+
+  # ELK Stack
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - cluster.name=threatintel-es
+      - node.name=es-node-1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.30
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    volumes:
+      - kibana_data:/usr/share/kibana/data
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.40
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    volumes:
+      - ./config/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./config/logstash/config:/usr/share/logstash/config:ro
+      - logstash_data:/usr/share/logstash/data
+      - nginx_logs:/var/log/nginx:ro
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.50
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "9600:9600"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Alert Manager
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.60
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.125'
+        reservations:
+          memory: 128M
+          cpus: '0.0625'
+
+  # VictoriaMetrics - High-performance metrics storage
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:latest
+    container_name: victoria-metrics
+    volumes:
+      - prometheus_data:/victoria-metrics-data
+    command:
+      - '--storageDataPath=/victoria-metrics-data'
+      - '--httpListenAddr=:8428'
+      - '--retentionPeriod=12m'
+      - '--maxInsertConcurrent=16'
+      - '--search.maxConcurrentRequests=16'
+      - '--search.maxMemoryPerQuery=1GB'
+    networks:
+      monitoring-network:
+        ipv4_address: 172.23.10.70
+    ports:
+      - "8428:8428"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'

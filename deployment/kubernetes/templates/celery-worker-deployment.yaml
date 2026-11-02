@@ -1,0 +1,171 @@
+{{- if .Values.celeryWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-worker
+spec:
+  {{- if not .Values.celeryWorker.autoscaling.enabled }}
+  replicas: {{ .Values.celeryWorker.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-worker
+  template:
+    metadata:
+      {{- with .Values.celeryWorker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "threatintel-platform.selectorLabels" . | nindent 8 }}
+        component: celery-worker
+    spec:
+      {{- with .Values.celeryWorker.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "threatintel-platform.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+      - name: celery-worker
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.celeryWorker.image.repository }}:{{ .Values.celeryWorker.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.celeryWorker.image.pullPolicy }}
+        command:
+        - celery
+        - -A
+        - app.celery
+        - worker
+        - --loglevel=info
+        - --concurrency={{ .Values.celeryWorker.env.CELERY_WORKER_CONCURRENCY }}
+        - --max-tasks-per-child={{ .Values.celeryWorker.env.CELERY_WORKER_MAX_TASKS_PER_CHILD }}
+        ports:
+        - name: metrics
+          containerPort: 9545
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.fastapi.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        - name: DATABASE_URL
+          value: {{ .Values.fastapi.env.DATABASE_URL }}
+        - name: REDIS_URL
+          value: {{ .Values.fastapi.env.REDIS_URL }}
+        - name: MONGO_URI
+          value: {{ .Values.fastapi.env.MONGO_URI }}
+        - name: CELERY_WORKER_CONCURRENCY
+          value: {{ .Values.celeryWorker.env.CELERY_WORKER_CONCURRENCY }}
+        - name: CELERY_WORKER_MAX_TASKS_PER_CHILD
+          value: {{ .Values.celeryWorker.env.CELERY_WORKER_MAX_TASKS_PER_CHILD }}
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery
+            - inspect
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery
+            - inspect
+            - active
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.celeryWorker.resources | nindent 12 }}
+        volumeMounts:
+        - name: worker-logs
+          mountPath: /var/log/celery
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+      volumes:
+      - name: worker-logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-worker
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9545
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "threatintel-platform.selectorLabels" . | nindent 4 }}
+    component: celery-worker
+{{- if .Values.celeryWorker.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  minReplicas: {{ .Values.celeryWorker.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.celeryWorker.autoscaling.maxReplicas }}
+  metrics:
+  {{- if .Values.celeryWorker.autoscaling.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.celeryWorker.autoscaling.targetCPUUtilizationPercentage }}
+  {{- end }}
+  {{- if .Values.celeryWorker.autoscaling.targetMemoryUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.celeryWorker.autoscaling.targetMemoryUtilizationPercentage }}
+  {{- end }}
+{{- end }}
+{{- end }}

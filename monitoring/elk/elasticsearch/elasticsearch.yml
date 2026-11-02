@@ -1,0 +1,50 @@
+# Elasticsearch Configuration
+cluster.name: "cybersecurity-api-logs"
+node.name: "es-master"
+node.roles: ["master", "data", "ingest"]
+
+# Network Configuration
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+
+# Discovery Configuration
+discovery.seed_hosts: ["elasticsearch:9300"]
+cluster.initial_master_nodes: ["es-master"]
+
+# Path Configuration
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+# Memory Configuration
+bootstrap.memory_lock: true
+
+# Security Configuration
+xpack.security.enabled: true
+xpack.security.enrollment.enabled: true
+xpack.security.http.ssl.enabled: false
+xpack.security.transport.ssl.enabled: false
+
+# Monitoring Configuration
+xpack.monitoring.collection.enabled: true
+
+# Log Level
+logger.level: INFO
+
+# JVM Options
+-Xms2g
+-Xmx2g
+
+# Performance Configuration
+indices.memory.index_buffer_size: 30%
+indices.memory.min_index_buffer_size: 96mb
+indices.memory.max_index_buffer_size: 2gb
+
+# Query Configuration
+indices.query.bool.max_clause_count: 10000
+
+# Index Configuration
+index.number_of_shards: 3
+index.number_of_replicas: 1
+index.refresh_interval: 5s
+index.max_result_window: 100000

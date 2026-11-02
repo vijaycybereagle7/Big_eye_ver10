@@ -1,0 +1,385 @@
+# =============================================
+# PERFORMANCE OPTIMIZATION CONFIGURATION
+# Settings for Database, Redis, and Application
+# =============================================
+
+# =============================================
+# POSTGRESQL CONFIGURATION
+# =============================================
+
+# Memory Settings
+shared_buffers = 4GB                          # 25% of total RAM
+effective_cache_size = 12GB                   # 75% of total RAM
+work_mem = 256MB                              # Per operation
+maintenance_work_mem = 1GB                    # For maintenance operations
+
+# Connection Settings
+max_connections = 200
+max_prepared_transactions = 200
+
+# WAL and Replication Settings
+wal_level = replica
+max_wal_senders = 10
+max_replication_slots = 10
+wal_keep_size = 2GB
+wal_compression = on
+
+# Checkpoint Settings
+checkpoint_completion_target = 0.9
+checkpoint_timeout = 15min
+max_wal_size = 8GB
+min_wal_size = 2GB
+
+# Index Settings
+random_page_cost = 1.1                        # For SSD storage
+effective_io_concurrency = 200                # For SSD storage
+
+# Autovacuum Settings
+autovacuum = on
+autovacuum_max_workers = 6
+autovacuum_naptime = 1min
+autovacuum_vacuum_threshold = 50
+autovacuum_analyze_threshold = 50
+
+# Logging Settings
+log_statement = 'none'                        # Don't log all statements
+log_min_duration_statement = 1000            # Log queries > 1 second
+log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+log_lock_waits = on
+log_temp_files = 10MB
+
+# Query Planner Settings
+default_statistics_target = 1000
+constraint_exclusion = partition
+
+# =============================================
+# REDIS CONFIGURATION
+# =============================================
+
+# Memory Settings
+maxmemory 8gb                                 # Adjust based on available RAM
+maxmemory-policy allkeys-lru                  # Evict least recently used keys
+maxmemory-samples 5                          # Number of samples for LRU
+
+# Persistence Settings
+save 900 1                                   # Save after 900 seconds if 1 key changed
+save 300 10                                  # Save after 300 seconds if 10 keys changed
+save 60 10000                                # Save after 60 seconds if 10000 keys changed
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+
+# Append Only File
+appendonly yes
+appendfsync everysec
+no-appendfsync-on-rewrite no
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+aof-load-truncated yes
+
+# Connection Settings
+tcp-keepalive 300
+timeout 300
+tcp-backlog 511
+
+# Client Connection Limits
+maxclients 10000
+
+# Slow Log
+slowlog-log-slower-than 10000                # Log operations slower than 10ms
+slowlog-max-len 128                          # Keep 128 slow log entries
+
+# Latency Monitoring
+latency-monitor-threshold 100                # Monitor operations > 100ms
+
+# =============================================
+# CACHE CONFIGURATION
+# =============================================
+
+# API Response Cache
+api_cache_ttl = 300                          # 5 minutes
+api_cache_max_size = 10000                   # Maximum cached responses
+
+# Reputation Score Cache
+reputation_cache_ttl = 3600                  # 1 hour
+reputation_cache_max_size = 50000            # Maximum cached scores
+
+# Blacklist Result Cache
+blacklist_cache_ttl = 86400                  # 24 hours
+blacklist_cache_max_size = 100000            # Maximum cached results
+
+# ML Prediction Cache
+ml_cache_ttl = 1800                          # 30 minutes
+ml_cache_max_size = 25000                    # Maximum cached predictions
+
+# Aggregated Statistics Cache
+stats_cache_ttl = 3600                       # 1 hour
+stats_cache_max_size = 1000                  # Maximum cached statistics
+
+# Real-time Counters
+realtime_counter_ttl = 0                     # Never expire
+realtime_counter_max = 1000000               # Maximum counter value
+
+# =============================================
+# DATABASE PARTITIONING CONFIGURATION
+# =============================================
+
+# Partition Management
+partition_retention_months = 24               # Keep 24 months of data
+partition_create_ahead_months = 3             # Create 3 months ahead
+partition_cleanup_enabled = true
+
+# Range Partitioning Settings
+range_partition_interval = '1 month'         # Monthly partitions
+range_partition_start_date = '2023-01-01'     # Start date for partitioning
+
+# List Partitioning
+list_partition_values = {
+    'active': ['active', 'active_pending'],
+    'inactive': ['inactive', 'suspended'],
+    'blocked': ['blocked', 'banned']
+}
+
+# Hash Partitioning
+hash_partition_count = 4                     # Number of hash partitions
+hash_partition_modulus = 4
+
+# =============================================
+# READ REPLICA CONFIGURATION
+# =============================================
+
+# Master Server Settings
+master_max_wal_senders = 10
+master_max_replication_slots = 10
+master_wal_keep_size = 2GB
+master_wal_level = replica
+
+# Replica Server Settings
+replica_max_connections = 250
+replica_hot_standby = on
+replica_max_standby_streaming_delay = 30s
+replica_wal_receiver_status_interval = 10s
+
+# Replication Slots
+replication_slots = [
+    'replica_slot_1',
+    'replica_slot_2',
+    'replica_slot_3'
+]
+
+# Failover Settings
+failover_lag_threshold_mb = 100
+failover_check_interval = 60                 # Check every 60 seconds
+failover_timeout_seconds = 30                # Failover timeout
+
+# Load Balancing
+connection_pool_size = 20                    # Connections per replica
+connection_pool_max_overflow = 30            # Maximum overflow connections
+
+# =============================================
+# MATERIALIZED VIEW CONFIGURATION
+# =============================================
+
+# Refresh Intervals
+user_engagement_refresh_interval = 15        # Refresh every 15 minutes
+daily_activity_refresh_interval = 60         # Refresh every hour
+monthly_revenue_refresh_interval = 1440      # Refresh daily (1440 minutes)
+realtime_stats_refresh_interval = 5          # Refresh every 5 minutes
+
+# Concurrent Refresh Settings
+concurrent_refresh_enabled = true
+concurrent_refresh_workers = 4
+
+# View Maintenance
+view_cleanup_retention_days = 90             # Keep 90 days of historical data
+auto_vacuum_enabled = true
+
+# =============================================
+# INDEXING CONFIGURATION
+# =============================================
+
+# Index Types and Usage
+index_types = {
+    'btree': {
+        'use_for': ['equality', 'range', 'sorting'],
+        'default': True,
+        'examples': ['id', 'email', 'created_at', 'status']
+    },
+    'gin': {
+        'use_for': ['full_text_search', 'jsonb', 'arrays'],
+        'examples': ['search_vector', 'metadata', 'tags']
+    },
+    'gist': {
+        'use_for': ['geometric', 'range', 'ltree'],
+        'examples': ['location', 'validity_range', 'hierarchy']
+    },
+    'partial': {
+        'use_for': ['subset_queries', 'filtered_indexes'],
+        'condition': 'status = \'active\''
+    },
+    'expression': {
+        'use_for': ['computed_values', 'case_statements'],
+        'examples': ['LOWER(email)', 'first_name || \' \' || last_name']
+    }
+}
+
+# Index Maintenance
+index_reindex_threshold = 0.3               # Reindex when fragmentation > 30%
+index_analyze_threshold = 1000              # Analyze after 1000 changes
+index_vacuum_threshold = 10000              # Vacuum after 10000 changes
+
+# =============================================
+# MONITORING CONFIGURATION
+# =============================================
+
+# Performance Monitoring
+monitoring_interval_seconds = 60
+alert_threshold_cpu_percent = 80
+alert_threshold_memory_percent = 85
+alert_threshold_disk_percent = 90
+alert_threshold_cache_hit_rate = 85
+
+# Log Levels
+log_level_redis = 'INFO'
+log_level_database = 'INFO'
+log_level_application = 'DEBUG'
+
+# Metrics Collection
+metrics_retention_days = 30
+metrics_aggregation_interval = 300          # 5 minutes
+metrics_archive_enabled = true
+
+# =============================================
+# CONNECTION POOLING CONFIGURATION
+# =============================================
+
+# Primary Database Pool
+primary_pool_size = 20
+primary_pool_max_overflow = 30
+primary_pool_timeout = 30
+primary_pool_recycle = 3600
+
+# Replica Pools (per replica)
+replica_pool_size = 15
+replica_pool_max_overflow = 25
+replica_pool_timeout = 30
+replica_pool_recycle = 1800
+
+# Cache Connection Pool
+cache_pool_size = 10
+cache_pool_max_overflow = 20
+cache_pool_timeout = 5
+
+# =============================================
+# BACKUP AND RECOVERY CONFIGURATION
+# =============================================
+
+# Database Backup
+backup_schedule = '0 2 * * *'               # Daily at 2 AM
+backup_retention_days = 30
+backup_compression = true
+backup_encryption = true
+
+# Point-in-Time Recovery
+pitr_retention_days = 7
+pitr_wal_archive_enabled = true
+pitr_archive_timeout = 60
+
+# Cache Backup
+cache_backup_enabled = true
+cache_backup_schedule = '0 1 * * *'         # Daily at 1 AM
+cache_restore_enabled = true
+
+# =============================================
+# SECURITY CONFIGURATION
+# =============================================
+
+# Database Security
+db_ssl_mode = 'require'
+db_ssl_cert = '/path/to/cert.pem'
+db_ssl_key = '/path/to/key.pem'
+db_ssl_ca = '/path/to/ca.pem'
+
+# Cache Security
+cache_password = 'secure_cache_password'
+cache_require_auth = true
+cache_acl_enabled = true
+
+# Connection Security
+max_connections_per_ip = 100
+connection_timeout_seconds = 30
+idle_connection_timeout = 600
+
+# =============================================
+# ENVIRONMENT-SPECIFIC SETTINGS
+# =============================================
+
+# Development Environment
+dev_config = {
+    'cache_ttl_multiplier': 0.1,            # 10% of production TTL
+    'partition_retention_months': 3,
+    'replica_count': 1,
+    'log_level': 'DEBUG'
+}
+
+# Staging Environment
+staging_config = {
+    'cache_ttl_multiplier': 0.5,            # 50% of production TTL
+    'partition_retention_months': 6,
+    'replica_count': 2,
+    'log_level': 'INFO'
+}
+
+# Production Environment
+prod_config = {
+    'cache_ttl_multiplier': 1.0,            # Full TTL
+    'partition_retention_months': 24,
+    'replica_count': 3,
+    'log_level': 'WARNING'
+}
+
+# =============================================
+# ALERTING CONFIGURATION
+# =============================================
+
+# Database Alerts
+db_alerts = {
+    'high_cpu_usage': {'threshold': 80, 'duration': 300},
+    'high_memory_usage': {'threshold': 85, 'duration': 300},
+    'slow_queries': {'threshold': 5, 'duration': 60},
+    'replication_lag': {'threshold': 100, 'duration': 60}
+}
+
+# Cache Alerts
+cache_alerts = {
+    'low_hit_rate': {'threshold': 85, 'duration': 300},
+    'high_memory_usage': {'threshold': 90, 'duration': 300},
+    'connection_failures': {'threshold': 10, 'duration': 60}
+}
+
+# Application Alerts
+app_alerts = {
+    'high_response_time': {'threshold': 1000, 'duration': 120},
+    'error_rate': {'threshold': 5, 'duration': 300},
+    'throughput_drop': {'threshold': 50, 'duration': 300}
+}
+
+# =============================================
+# MIGRATION AND DEPLOYMENT
+# =============================================
+
+# Migration Settings
+migration_batch_size = 1000
+migration_max_concurrent = 4
+migration_rollback_enabled = true
+
+# Deployment Settings
+blue_green_deployment = true
+canary_deployment = true
+canary_traffic_percentage = 10
+rollback_timeout_minutes = 15
+
+# Health Check Settings
+health_check_interval = 30
+health_check_timeout = 5
+health_check_retries = 3

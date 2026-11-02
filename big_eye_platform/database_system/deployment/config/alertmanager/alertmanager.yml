@@ -1,0 +1,173 @@
+# Alertmanager Configuration for Threat Intelligence Platform
+# Multi-channel alert routing with escalation
+
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@threatintel.com'
+  smtp_auth_username: 'alerts@threatintel.com'
+  smtp_auth_password: 'your_smtp_password_here'
+  smtp_require_tls: true
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route configuration
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default'
+  routes:
+    # Critical alerts
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 5m
+    
+    # Database critical alerts
+    - match:
+        severity: critical
+        service: database
+      receiver: 'database-critical'
+      group_wait: 5s
+      group_interval: 1m
+      repeat_interval: 2m
+    
+    # Application critical alerts
+    - match:
+        severity: critical
+        service: api
+      receiver: 'application-critical'
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 5m
+    
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 24h
+
+# Inhibition rules
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']
+
+# Receivers configuration
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'admin@threatintel.com'
+        subject: '[ThreatIntel] Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+
+  - name: 'critical-alerts'
+    # Email notifications
+    email_configs:
+      - to: 'admin@threatintel.com,oncall@threatintel.com'
+        subject: '[CRITICAL] ThreatIntel Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 CRITICAL ALERT 🚨
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+          
+          Please investigate immediately!
+        send_resolved: true
+    
+    # Slack notifications
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts-critical'
+        title: '🚨 CRITICAL Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Instance:* {{ .Labels.instance }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+        send_resolved: true
+    
+    # PagerDuty integration (optional)
+    pagerduty_configs:
+      - routing_key: 'YOUR_PAGERDUTY_INTEGRATION_KEY'
+        description: 'Critical ThreatIntel Alert: {{ .GroupLabels.alertname }}'
+
+  - name: 'database-critical'
+    email_configs:
+      - to: 'dba@threatintel.com,admin@threatintel.com'
+        subject: '[DATABASE CRITICAL] ThreatIntel Database Alert'
+        body: |
+          🚨 DATABASE CRITICAL ALERT 🚨
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Database: {{ .Labels.component }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+          
+          Database team should investigate immediately!
+        send_resolved: true
+
+  - name: 'application-critical'
+    email_configs:
+      - to: 'devops@threatintel.com,admin@threatintel.com'
+        subject: '[APP CRITICAL] ThreatIntel Application Alert'
+        body: |
+          🚨 APPLICATION CRITICAL ALERT 🚨
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+          
+          Development team should investigate immediately!
+        send_resolved: true
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'admin@threatintel.com'
+        subject: '[WARNING] ThreatIntel Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          ⚠️ WARNING ALERT ⚠️
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+          
+          Please review and take action if needed.
+        send_resolved: true

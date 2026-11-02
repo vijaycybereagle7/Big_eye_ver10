@@ -1,0 +1,158 @@
+# Filebeat Configuration for Cybersecurity API
+
+filebeat.inputs:
+# System logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/*.log
+    - /var/log/syslog
+  fields:
+    log_type: system
+  fields_under_root: true
+  multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+  multiline.negate: true
+  multiline.match: after
+
+# Application logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/cybersecurity-api/*.log
+  fields:
+    log_type: application
+    service: cybersecurity-api
+  fields_under_root: true
+
+# API access logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/cybersecurity-api/access.log
+  fields:
+    log_type: api
+    service: cybersecurity-api
+  fields_under_root: true
+
+# Security logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/cybersecurity-api/security.log
+  fields:
+    log_type: security
+    service: cybersecurity-api
+  fields_under_root: true
+
+# Database logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/postgresql/*.log
+    - /var/log/mongodb/*.log
+  fields:
+    log_type: database
+  fields_under_root: true
+
+# Threat intelligence logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/cybersecurity-api/threat-intel.log
+  fields:
+    log_type: threat_intel
+    service: threat-intelligence
+  fields_under_root: true
+
+# Nginx/Apache logs
+- type: log
+  enabled: true
+  paths:
+    - /var/log/nginx/*.log
+    - /var/log/apache2/*.log
+  fields:
+    log_type: webserver
+  fields_under_root: true
+
+# Docker container logs
+- type: container
+  paths:
+    - '/var/lib/docker/containers/*/*.log'
+  processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+
+# Kubernetes logs (if applicable)
+- type: container
+  paths:
+    - /var/log/containers/*cybersecurity*.log
+  processors:
+  - add_kubernetes_metadata:
+      host: ${NODE_NAME}
+      matchers:
+      - logs_path:
+          logs_path: "/var/log/containers/"
+
+# HTTP input for direct log ingestion
+http.enabled: true
+http.port: 8080
+
+# JSON parsing
+json.keys_under_root: true
+json.add_error_key: true
+
+# Output configuration
+output.logstash:
+  hosts: ["logstash:5044"]
+  compression_level: 3
+
+# Alternative output to Elasticsearch
+# output.elasticsearch:
+#   hosts: ["elasticsearch:9200"]
+#   index: "cybersecurity-logs-%{+yyyy.MM.dd}"
+
+# Logging configuration
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+# Processors for log enrichment
+processors:
+- add_cloud_metadata:
+- add_docker_metadata: ~
+- add_host_metadata:
+- add_fields:
+    target: ""
+    fields:
+      environment: production
+      application: cybersecurity-api
+
+# Monitoring configuration
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+
+# Module configuration
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: true
+  reload.period: 10s
+
+# Setup configuration
+setup.template.settings:
+  index.number_of_shards: 3
+  index.number_of_replicas: 1
+  index.refresh_interval: 5s
+
+setup.template.name: "cybersecurity-logs"
+setup.template.pattern: "cybersecurity-logs-*"
+
+# Queue configuration
+queue.mem:
+  events: 4096
+  flush.min_events: 512
+  flush.timeout: 5s

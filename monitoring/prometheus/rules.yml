@@ -1,0 +1,228 @@
+groups:
+- name: database.rules
+  rules:
+  - alert: PostgreSQLDown
+    expr: pg_up == 0
+    for: 5m
+    labels:
+      severity: critical
+      service: postgresql
+    annotations:
+      summary: "PostgreSQL instance {{ $labels.instance }} is down"
+      description: "PostgreSQL instance {{ $labels.instance }} has been down for more than 5 minutes."
+
+  - alert: PostgreSQLTooManyConnections
+    expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+    for: 5m
+    labels:
+      severity: warning
+      service: postgresql
+    annotations:
+      summary: "PostgreSQL {{ $labels.instance }} has too many connections"
+      description: "PostgreSQL {{ $labels.instance }} has {{ $value }} active connections, which is above 80% of maximum connections."
+
+  - alert: PostgreSQLDiskSpaceLow
+    expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.8
+    for: 10m
+    labels:
+      severity: warning
+      service: postgresql
+    annotations:
+      summary: "PostgreSQL disk space low on {{ $labels.instance }}"
+      description: "Disk usage is above 80% on {{ $labels.instance }} mountpoint {{ $labels.mountpoint }}."
+
+  - alert: PostgreSQLQueryPerformance
+    expr: rate(pg_stat_database_blk_read_time[5m]) > 100
+    for: 5m
+    labels:
+      severity: warning
+      service: postgresql
+    annotations:
+      summary: "PostgreSQL slow queries detected on {{ $labels.instance }}"
+      description: "Average query read time is {{ $value }}ms on {{ $labels.instance }}."
+
+  - alert: MongoDBDown
+    expr: mongodb_up == 0
+    for: 5m
+    labels:
+      severity: critical
+      service: mongodb
+    annotations:
+      summary: "MongoDB instance {{ $labels.instance }} is down"
+      description: "MongoDB instance {{ $labels.instance }} has been down for more than 5 minutes."
+
+- name: application.rules
+  rules:
+  - alert: HighHTTPErrorRate
+    expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+      service: api
+    annotations:
+      summary: "High HTTP 5xx error rate on {{ $labels.instance }}"
+      description: "HTTP 5xx error rate is {{ $value }} per second on {{ $labels.instance }}."
+
+  - alert: HighHTTPRequestLatency
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+    for: 10m
+    labels:
+      severity: warning
+      service: api
+    annotations:
+      summary: "High HTTP request latency on {{ $labels.instance }}"
+      description: "95th percentile request latency is {{ $value }} seconds on {{ $labels.instance }}."
+
+  - alert: APIResponseTimeHigh
+    expr: api_request_duration_seconds{quantile="0.95"} > 2
+    for: 5m
+    labels:
+      severity: warning
+      service: api
+    annotations:
+      summary: "API response time is high on {{ $labels.instance }}"
+      description: "95th percentile response time is {{ $value }}s on {{ $labels.instance }}."
+
+  - alert: HighAPITraffic
+    expr: rate(http_requests_total[5m]) > 100
+    for: 5m
+    labels:
+      severity: info
+      service: api
+    annotations:
+      summary: "High API traffic detected on {{ $labels.instance }}"
+      description: "API request rate is {{ $value }} requests per second on {{ $labels.instance }}."
+
+- name: threat_intelligence.rules
+  rules:
+  - alert: ThreatFeedDown
+    expr: threat_feed_status == 0
+    for: 10m
+    labels:
+      severity: critical
+      service: threat-intelligence
+    annotations:
+      summary: "Threat feed {{ $labels.feed_name }} is down"
+      description: "Threat feed {{ $labels.feed_name }} has been down for more than 10 minutes."
+
+  - alert: HighThreatDetection
+    expr: rate(threats_detected_total[1h]) > 50
+    for: 15m
+    labels:
+      severity: warning
+      service: threat-intelligence
+    annotations:
+      summary: "High threat detection rate"
+      description: "Threat detection rate is {{ $value }} threats per hour, which is above normal threshold."
+
+  - alert: ThreatIntelligenceStale
+    expr: time() - threat_feed_last_update > 3600
+    for: 15m
+    labels:
+      severity: warning
+      service: threat-intelligence
+    annotations:
+      summary: "Threat intelligence data is stale"
+      description: "Threat intelligence feed {{ $labels.feed_name }} has not been updated for {{ $value }} seconds."
+
+  - alert: APIKeyExpired
+    expr: threat_feed_api_key_expiry < time()
+    for: 1m
+    labels:
+      severity: critical
+      service: threat-intelligence
+    annotations:
+      summary: "Threat feed API key expired"
+      description: "API key for {{ $labels.feed_name }} has expired and needs renewal."
+
+- name: system.rules
+  rules:
+  - alert: HighCPUUsage
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage on {{ $labels.instance }}"
+      description: "CPU usage is above 80% on {{ $labels.instance }}."
+
+  - alert: HighMemoryUsage
+    expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage on {{ $labels.instance }}"
+      description: "Memory usage is above 85% on {{ $labels.instance }}."
+
+  - alert: DiskSpaceLow
+    expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100 > 85
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Low disk space on {{ $labels.instance }}"
+      description: "Disk usage is above 85% on {{ $labels.instance }} mountpoint {{ $labels.mountpoint }}."
+
+  - alert: ServiceDown
+    expr: up == 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Service {{ $labels.job }} on {{ $labels.instance }} is down"
+      description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 5 minutes."
+
+- name: security.rules
+  rules:
+  - alert: MultipleFailedLogins
+    expr: rate(failed_login_attempts_total[5m]) > 10
+    for: 2m
+    labels:
+      severity: warning
+      service: security
+    annotations:
+      summary: "Multiple failed login attempts detected"
+      description: "Failed login attempts rate is {{ $value }} per second, which may indicate a brute force attack."
+
+  - alert: SuspiciousAPIActivity
+    expr: rate(suspicious_api_requests_total[5m]) > 5
+    for: 5m
+    labels:
+      severity: critical
+      service: security
+    annotations:
+      summary: "Suspicious API activity detected"
+      description: "Suspicious API requests rate is {{ $value }} per second on {{ $labels.endpoint }}."
+
+  - alert: MaliciousIPDetected
+    expr: malicious_ip_detections_total > 0
+    for: 1m
+    labels:
+      severity: critical
+      service: security
+    annotations:
+      summary: "Malicious IP detected"
+      description: "Malicious IP {{ $labels.ip_address }} detected from {{ $labels.source }}."
+
+- name: business.rules
+  rules:
+  - alert: LowValidationThroughput
+    expr: rate(validations_processed_total[5m]) < 10
+    for: 15m
+    labels:
+      severity: warning
+      service: validation
+    annotations:
+      summary: "Low validation throughput"
+      description: "Validation processing rate is {{ $value }} validations per second, which is below normal threshold."
+
+  - alert: HighAPIUsageQuota
+    expr: api_usage_quota_percentage > 80
+    for: 10m
+    labels:
+      severity: warning
+      service: api
+    annotations:
+      summary: "High API usage quota usage"
+      description: "API usage quota is at {{ $value }}% for {{ $labels.provider }}."

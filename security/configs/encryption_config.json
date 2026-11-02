@@ -1,0 +1,88 @@
+{
+  "encryption": {
+    "master_key_source": "environment",
+    "encryption_algorithm": "AES-256-CBC",
+    "key_derivation": "PBKDF2-SHA256",
+    "iterations": 100000,
+    "salt_length": 16,
+    "key_length": 32,
+    "sensitive_fields": {
+      "users": ["email", "phone", "ssn", "credit_card", "password"],
+      "orders": ["shipping_address", "billing_address", "payment_info"],
+      "payments": ["card_number", "cvv", "bank_account", "routing_number"],
+      "medical_records": ["ssn", "date_of_birth", "medical_history"]
+    },
+    "field_encryption": {
+      "enabled": true,
+      "database_encryption": true,
+      "file_encryption": true,
+      "backup_encryption": true
+    }
+  },
+  "encryption_transit": {
+    "min_tls_version": "1.2",
+    "cipher_suites": [
+      "ECDHE+AESGCM",
+      "ECDHE+CHACHA20",
+      "DHE+AESGCM",
+      "DHE+CHACHA20"
+    ],
+    "certificate_validation": {
+      "verify_mode": "REQUIRED",
+      "check_hostname": true,
+      "ssl_verify": true
+    },
+    "client_certificates": {
+      "enabled": false,
+      "cert_path": "/workspace/security/encryption/certs/client.crt",
+      "key_path": "/workspace/security/encryption/certs/client.key"
+    },
+    "certificate_authority": {
+      "path": "/workspace/security/encryption/certs/ca.crt"
+    }
+  },
+  "pii_protection": {
+    "detection": {
+      "auto_detect": true,
+      "patterns": {
+        "email": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b",
+        "phone": "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b",
+        "ssn": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+        "credit_card": "\\b(?:\\d{4}[-\\s]?){3}\\d{4}\\b",
+        "ip_address": "\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b"
+      },
+      "sensitivity_levels": {
+        "email": 3,
+        "phone": 3,
+        "ssn": 5,
+        "credit_card": 5,
+        "bank_account": 5,
+        "medical_id": 5,
+        "biometric_data": 5
+      }
+    },
+    "masking": {
+      "default_char": "*",
+      "email_masking": "partial",
+      "phone_masking": "partial",
+      "ssn_masking": "last_four",
+      "credit_card_masking": "last_four"
+    },
+    "anonymization": {
+      "hash_salt": "pii_protection_salt_2025",
+      "methods": ["hash", "pseudonym", "synthetic"],
+      "pseudonym_length": 8,
+      "synthetic_data": true
+    },
+    "validation": {
+      "credit_card_validation": true,
+      "luhn_algorithm": true,
+      "format_validation": true
+    }
+  },
+  "database": {
+    "path": "/workspace/security/access_control/access_control.db",
+    "backup_path": "/workspace/security/backups/access_control.db.backup",
+    "retention_days": 30
+  }
+}

@@ -1,0 +1,346 @@
+{{- if .Values.networkPolicy.enabled }}
+# Network Policy for FastAPI Application
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-fastapi
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: fastapi
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Nginx/Ingress
+  - from:
+    - podSelector:
+        matchLabels:
+          component: nginx
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow metrics scraping from Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 8001
+  # Allow from same namespace (health checks)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Release.Namespace }}
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to databases
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: mongodb
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 27017  # MongoDB
+    - protocol: TCP
+      port: 6379  # Redis
+  # Allow to external APIs
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 80   # HTTP
+
+---
+# Network Policy for Celery Workers
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-worker
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-worker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow metrics scraping from Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 9545
+  # Allow from same namespace (control plane communication)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Release.Namespace }}
+    ports:
+    - protocol: TCP
+      port: 9545
+  egress:
+  # Allow to databases
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: mongodb
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 27017
+    - protocol: TCP
+      port: 6379
+  # Allow to FastAPI app (for task results)
+  - to:
+    - podSelector:
+        matchLabels:
+          component: fastapi
+    ports:
+    - protocol: TCP
+      port: 8000
+
+---
+# Network Policy for Celery Beat
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-beat
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-beat
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from same namespace (web interface)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Release.Namespace }}
+    ports:
+    - protocol: TCP
+      port: 5555
+  egress:
+  # Allow to databases
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+
+---
+# Network Policy for PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-postgresql
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from FastAPI app
+  - from:
+    - podSelector:
+        matchLabels:
+          component: fastapi
+    - podSelector:
+        matchLabels:
+          component: celery-worker
+    - podSelector:
+        matchLabels:
+          component: celery-beat
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow from backup jobs
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: backup
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Network Policy for MongoDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-mongodb
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mongodb
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from FastAPI app
+  - from:
+    - podSelector:
+        matchLabels:
+          component: fastapi
+    - podSelector:
+        matchLabels:
+          component: celery-worker
+    ports:
+    - protocol: TCP
+      port: 27017
+  # Allow from backup jobs
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: backup
+    ports:
+    - protocol: TCP
+      port: 27017
+
+---
+# Network Policy for Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-redis
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from FastAPI app
+  - from:
+    - podSelector:
+        matchLabels:
+          component: fastapi
+    - podSelector:
+        matchLabels:
+          component: celery-worker
+    - podSelector:
+        matchLabels:
+          component: celery-beat
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow from backup jobs
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: backup
+    ports:
+    - protocol: TCP
+      port: 6379
+
+---
+# Network Policy for Prometheus (restrictive)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-prometheus
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from monitoring namespace only
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow from Grafana for service discovery
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  # Allow to scrape all pods in the application namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: {{ .Release.Namespace }}
+    ports:
+    - protocol: TCP
+      port: 8001   # FastAPI metrics
+    - protocol: TCP
+      port: 9545   # Celery metrics
+    - protocol: TCP
+      port: 9187   # PostgreSQL exporter
+    - protocol: TCP
+      port: 9216   # MongoDB exporter
+    - protocol: TCP
+      port: 9121   # Redis exporter
+
+---
+# Default deny all namespace policy (if needed)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+{{- end }}

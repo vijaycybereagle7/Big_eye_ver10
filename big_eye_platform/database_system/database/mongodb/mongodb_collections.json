@@ -1,0 +1,814 @@
+# Blueprint for MongoDB Collections: raw_threat_feeds, security_bulletins, anomaly_detections with Validation, Indexing, Retention, and Examples
+
+## Executive Summary and Objectives
+
+Security platforms accumulate heterogeneous data from a wide array of sources: machine-curated threat intelligence feeds, authoritative vendor bulletins, and internally generated anomaly events. This blueprint specifies three MongoDB collections—raw_threat_feeds, security_bulletins, and anomaly_detections—designed to store such data in a lossless, query-efficient, and compliant manner. Each collection is defined with explicit JSON Schema validation, carefully chosen indexes, a uniform document envelope, temporal modeling aligned to both ingestion and event occurrence, and retention policies that support auditability while controlling storage costs.
+
+Deliverables include a complete JSON specification for the collections, validation rules, and index definitions to be saved to database/mongodb_collections.json. The design emphasizes extensibility and operational simplicity: a consistent document structure across collections, a minimal set of canonical identifiers, strict type constraints for core fields, and flexible fields for heterogeneous attributes. Indexing focuses on common filters—time, source, severity, tags, and certain enrichment hashes—while text indexes are scoped to avoid unnecessary overhead. A tiered retention approach with configurable policies, TTL (time-to-live) indexes, and archival hooks ensures compliance and cost control. The design also addresses audit requirements, partial unique indexes for idempotent ingestion, and safe rollbacks.
+
+## Requirements, Assumptions, and Constraints
+
+The collections must support several core functions: ingesting unstructured and semi-structured data, correlating bulletins with threat indicators and anomalies, enabling efficient queries by time, source, severity, tags, and content fields, and allowing backfills and upserts from external systems without data loss. Non-functional requirements include predictable query latency, horizontal scalability through sharding, lifecycle management via archival and TTL processes, and comprehensive audit logging across read and write operations. The solution assumes MongoDB as the primary data store with application-level enforcement of validation and idempotency. Constraints include heterogeneous input formats, variable enrichment quality, and cost/performance trade-offs in index selection. Success will be measured by completeness and correctness of validation, high recall/precision for critical queries, low tail latency, storage efficiency, and demonstrable compliance with retention and audit policies.
+
+## Conceptual Data Model
+
+A uniform document envelope is applied to all three collections to standardize how metadata and content are represented and to simplify query and operations patterns. Each document includes a globally unique _id (ObjectId), timestamps for ingestion (ingested_at) and event occurrence (event_time) where applicable, minimal canonical identifiers (feed_id, bulletin_id, anomaly_id), a source block for provenance, severity and confidence scores normalized to a 0–100 scale, and a normalized_tags array for consistent tagging and text search. Indicators and references are modeled as arrays of objects with fields such as type, value, and context, while raw data can be stored either as normalized JSON or as an optional raw snapshot.
+
+Normalization choices follow consistent patterns across collections. Timestamps include at least ingested_at and, for time-based entities like bulletins and anomalies, event_time. Confidence and severity are represented as integers on a 0–100 scale, with severity mapped to standardized levels for readability (info, low, medium, high, critical). The relationship between entities is driven by references and tags: bulletins may reference threat indicators by value and type, while anomalies reference related indicators by indicator_id and may include contributing evidence. Feed-specific or vendor-specific extensions are captured in an extensions map to preserve forward compatibility without constantly altering the core schema.
+
+To provide a concrete foundation for these patterns, Table 1 summarizes the document envelope fields and their definitions, and Table 2 maps canonical identifiers and reference structures across collections.
+
+Table 1: Document Envelope Field Dictionary
+
+| Field                | Type       | Required | Description                                                                                          |
+|----------------------|------------|----------|------------------------------------------------------------------------------------------------------|
+| _id                  | ObjectId   | Yes      | Globally unique identifier for the document.                                                         |
+| schema_version       | string     | Yes      | Version of the document schema used.                                                                 |
+| created_at           | timestamp  | Yes      | Timestamp when the document was created in the database.                                             |
+| updated_at           | timestamp  | Yes      | Timestamp of the last update to the document.                                                        |
+| ingested_at          | timestamp  | Yes      | Time the document was ingested by the platform.                                                      |
+| event_time           | timestamp  | No       | Time the event described by the document occurred in the real world.                                 |
+| feed_id              | string     | No       | Unique identifier for the source feed (raw_threat_feeds).                                            |
+| bulletin_id          | string     | No       | Unique identifier for the security bulletin (security_bulletins).                                    |
+| anomaly_id           | string     | No       | Unique identifier for the anomaly event (anomaly_detections).                                        |
+| source               | object     | Yes      | Provenance metadata including type, name, vendor, source_url, license, and a canonical reference_id. |
+| severity             | object     | No       | Normalized severity representation with level and score.                                              |
+| confidence           | int        | No       | Confidence score from 0 (none) to 100 (high).                                                        |
+| normalized_tags      | array[str] | No       | Curated tags normalized to lowercase and restricted character set.                                   |
+| indicators           | array[obj] | No       | Indicator objects with type, value, context, first_seen, last_seen, and sources.                     |
+| references           | array[obj] | No       | Reference objects with type (url, advisory, commit), reference_id, title, and publisher.             |
+| extensions           | object     | No       | Feed- or vendor-specific extensions captured in a flexible map.                                      |
+| enrichment           | object     | No       | Output of enrichment pipelines (e.g., hashes), with flags for availability or completion.            |
+| raw                  | object     | No       | Optional raw snapshot of the original document for lossless ingestion.                               |
+| history              | array[obj] | No       | Change history with at, field, old_value, new_value, and actor.                                      |
+| audit                | object     | No       | Audit metadata including who, when, action, reason, and request_id.                                  |
+
+Table 2: Identifier and Reference Mapping Across Collections
+
+| Collection            | Primary ID         | Related References                                | Indicator Linkage                                         |
+|-----------------------|--------------------|---------------------------------------------------|-----------------------------------------------------------|
+| raw_threat_feeds      | feed_id (string)   | references[].reference_id (e.g., vendor advisory) | indicators[].value/type with context and time bounds      |
+| security_bulletins    | bulletin_id (string) | references[].reference_id (URLs, advisories)     | May link to indicators referenced by value/type           |
+| anomaly_detections    | anomaly_id (string) | references[].reference_id (tickets, investigations) | indicators[].indicator_id and contributing evidence     |
+
+### Document Envelope
+
+The envelope ensures consistent and auditable records across collections. Timestamps capture both ingestion and event semantics, with event_time serving as the basis for time-window queries and correlations. Canonical IDs facilitate idempotent ingestion and upsert patterns: feed_id for raw feeds, bulletin_id for bulletins, and anomaly_id for anomalies. The source object provides provenance, including type (community, commercial, vendor), name, vendor, source_url, license, and a canonical reference_id for traceability. Indicators are generic objects that allow arbitrary types (e.g., IP, domain, URL, file hash, CVE) and contextual fields, enabling cross-collection joins via value and type without locking the schema to a fixed set. Extensions preserve feed-specific attributes that are not yet standardized; enrichment aggregates post-ingest processing outcomes, such as hashes for deduplication or content-based correlation. The audit and history blocks make change tracking explicit, supporting compliance and operational forensics.
+
+### Canonical Identifiers and References
+
+Stable IDs are mandatory for deduplication and upsert operations. When a source does not provide an inherent identifier, the system composes a deterministic feed_id from source.name, source.type, and a normalized key (e.g., an indicator value or a vendor-defined key). Bulletins and anomalies receive stable IDs from their publishers when available; otherwise, application-level deterministic IDs are derived from normalized titles, vendors, and timestamps. References capture URLs, advisories, commit IDs, or internal ticket identifiers. Indicators link entities across collections by type and value; for example, a bulletin may cite a set of indicators that are also present in raw feeds, enabling correlation with anomalies through tag overlaps and indicator matches.
+
+## Collection Schemas and Validation
+
+Validation is enforced via MongoDB’s JSON Schema mechanisms. The schemas use bsonType and pattern constraints to ensure type correctness, with required fields enforcing the document envelope. The design favors strict typing for timestamps, integers, enums, and arrays, while keeping extensions and enrichment open maps to accommodate variability. Validation rules include structural checks for arrays of objects and conditionally required fields. As part of ongoing evolution, schema_version allows forward-compatible migrations: older documents remain valid, while new fields are introduced with clear defaults and validation semantics.
+
+Table 3 captures common field constraints across collections, and subsequent subsections define the specific schemas.
+
+Table 3: Common Field Constraints Across Collections
+
+| Field                  | Type            | Constraints                                                                                         |
+|------------------------|-----------------|-----------------------------------------------------------------------------------------------------|
+| _id                    | ObjectId        | Generated by database; globally unique.                                                             |
+| schema_version         | string          | Any non-empty string; recommend semantic versioning (e.g., “1.0.0”).                                |
+| created_at             | timestamp       | bsonType “date”; must be present.                                                                   |
+| updated_at             | timestamp       | bsonType “date”; must be present.                                                                   |
+| ingested_at            | timestamp       | bsonType “date”; must be present.                                                                   |
+| event_time             | timestamp       | bsonType “date”; conditional based on collection semantics.                                         |
+| source                 | object          | Required subfields: type (enum), name (string), vendor (string, optional), reference_id (string).   |
+| severity.level         | enum            | One of “info”, “low”, “medium”, “high”, “critical”.                                                 |
+| severity.score         | int             | 0–100 inclusive when present.                                                                       |
+| confidence             | int             | 0–100 inclusive when present.                                                                       |
+| normalized_tags        | array[string]   | Elements match pattern “^[a-z0-9_\\-]{1,64}$”; array length ≤ 512.                                  |
+| indicators             | array[object]   | Objects contain: type (string), value (string), first_seen/last_seen (timestamp, optional), context (object, optional). |
+| references             | array[object]   | Objects contain: type (enum: url, advisory, commit, ticket), reference_id (string), title (string), publisher (string). |
+| extensions             | object          | Map of arbitrary keys; values must be serializable.                                                 |
+| enrichment             | object          | Flags such as “geolocation_done” (bool), hashes (object with sha256/sha1/md5 as string).            |
+| raw                    | object          | Optional original payload snapshot.                                                                 |
+| history                | array[object]   | Objects contain at (timestamp), field (string), old_value/new_value (mixed), actor (string).        |
+| audit                  | object          | Objects contain who (string), when (timestamp), action (string), reason (string, optional), request_id (string). |
+
+### raw_threat_feeds
+
+The raw_threat_feeds collection stores ingested records from external threat intelligence feeds with lossless fidelity. It supports idempotent ingestion by combining source metadata with deterministic keys. Indicators are modeled generically to accommodate IPs, domains, URLs, hashes, and other types. Enrichment hashes facilitate deduplication and correlation.
+
+Schema highlights:
+
+- Required fields: _id, schema_version, created_at, updated_at, ingested_at, source, severity (optional), confidence (optional), normalized_tags (optional), indicators (optional), references (optional), extensions (optional), enrichment (optional).
+- Types: timestamps as bsonType “date”; severity as object with level (enum) and score (int 0–100); confidence as int 0–100; normalized_tags as array of strings constrained by pattern; indicators and references as arrays of objects with defined subfields; enrichment flags and hashes in an object.
+- Extensions: a flexible map for feed-specific details.
+- Raw snapshot: optional lossless original payload.
+
+Table 4: raw_threat_feeds Fields and Constraints
+
+| Field/Subfield                  | Type            | Required | Validation Notes                                                                                              |
+|---------------------------------|-----------------|----------|---------------------------------------------------------------------------------------------------------------|
+| schema_version                  | string          | Yes      | Any non-empty string.                                                                                         |
+| created_at, updated_at          | timestamp       | Yes      | bsonType “date”.                                                                                              |
+| ingested_at                     | timestamp       | Yes      | bsonType “date”.                                                                                              |
+| feed_id                         | string          | No       | If present, used for idempotency; stable and unique per feed source.                                          |
+| source.type                     | enum            | Yes      | “community”, “commercial”, “vendor”.                                                                          |
+| source.name                     | string          | Yes      | Non-empty.                                                                                                    |
+| source.vendor                   | string          | No       | Optional.                                                                                                     |
+| source.source_url               | string          | No       | Optional URL string.                                                                                          |
+| source.license                  | string          | No       | Optional license text.                                                                                        |
+| source.reference_id             | string          | Yes      | Stable reference ID for traceability.                                                                         |
+| severity.level                  | enum            | No       | “info”, “low”, “medium”, “high”, “critical”.                                                                  |
+| severity.score                  | int             | No       | 0–100 inclusive if present.                                                                                   |
+| confidence                      | int             | No       | 0–100 inclusive if present.                                                                                   |
+| normalized_tags[]               | string          | No       | Each matches pattern “^[a-z0-9_\\-]{1,64}$”; array length ≤ 512.                                              |
+| indicators[].type               | string          | No       | Indicator type (e.g., “ip”, “domain”, “url”, “hash”, “cve”).                                                  |
+| indicators[].value              | string          | No       | Indicator value; length ≤ 2048.                                                                               |
+| indicators[].context            | object          | No       | Optional contextual metadata.                                                                                 |
+| indicators[].first_seen         | timestamp       | No       | bsonType “date”.                                                                                              |
+| indicators[].last_seen          | timestamp       | No       | bsonType “date”.                                                                                              |
+| references[].type               | enum            | No       | “url”, “advisory”, “commit”, “ticket”.                                                                        |
+| references[].reference_id       | string          | No       | Stable identifier or URL.                                                                                     |
+| references[].title              | string          | No       | Optional title.                                                                                               |
+| references[].publisher          | string          | No       | Optional publisher name.                                                                                      |
+| extensions                      | object          | No       | Flexible map; values must be serializable.                                                                    |
+| enrichment.flags.geolocation_done | bool          | No       | Boolean flag.                                                                                                 |
+| enrichment.hashes.sha256        | string          | No       | Hex-encoded SHA-256; length 64.                                                                               |
+| enrichment.hashes.sha1          | string          | No       | Hex-encoded SHA-1; length 40.                                                                                 |
+| enrichment.hashes.md5           | string          | No       | Hex-encoded MD5; length 32.                                                                                   |
+| raw                             | object          | No       | Optional snapshot of the original payload.                                                                    |
+| history                         | array[object]   | No       | Change entries with at, field, old_value, new_value, actor.                                                   |
+| audit                           | object          | No       | Audit metadata with who, when, action, reason, request_id.                                                    |
+
+Example document:
+
+```json
+{
+  "_id": { "$oid": "6700f1b3a1d2c34f7bd08abc" },
+  "schema_version": "1.0.0",
+  "created_at": { "$date": "2025-10-30T01:00:00Z" },
+  "updated_at": { "$date": "2025-10-30T01:00:00Z" },
+  "ingested_at": { "$date": "2025-10-30T00:59:00Z" },
+  "feed_id": "feed-com-acme-v1-ip-198.51.100.5",
+  "source": {
+    "type": "commercial",
+    "name": "acme_threat_intel",
+    "vendor": "Acme Intel LLC",
+    "source_url": "https://intel.example.com/feed/v1",
+    "license": "Acme Commercial License",
+    "reference_id": "acme:feed:v1:record:abc123"
+  },
+  "severity": { "level": "medium", "score": 60 },
+  "confidence": 75,
+  "normalized_tags": ["malware", "command-and-control", "active"],
+  "indicators": [
+    {
+      "type": "ip",
+      "value": "198.51.100.5",
+      "context": { "port": 443, "protocol": "tcp" },
+      "first_seen": { "$date": "2025-10-29T12:00:00Z" },
+      "last_seen": { "$date": "2025-10-30T00:30:00Z" }
+    }
+  ],
+  "references": [
+    { "type": "url", "reference_id": "https://intel.example.com/indicator/198.51.100.5", "title": "Acme Indicator Detail", "publisher": "Acme Intel LLC" }
+  ],
+  "extensions": { "feed_specific": { "dataset": "ip_rep", "epoch": 7 } },
+  "enrichment": {
+    "flags": { "geolocation_done": true },
+    "hashes": { "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }
+  },
+  "raw": { "received_at": "2025-10-30T00:58:55Z", "payload": { "record_key": "abc123", "indicator": "198.51.100.5" } },
+  "history": [],
+  "audit": { "who": "ingestion-service", "when": { "$date": "2025-10-30T00:59:10Z" }, "action": "insert", "reason": "initial_load", "request_id": "req-12345" }
+}
+```
+
+JSON Schema (conceptual; to be enforced via MongoDB validator):
+
+```json
+{
+  "bsonType": "object",
+  "required": ["_id", "schema_version", "created_at", "updated_at", "ingested_at", "source"],
+  "properties": {
+    "schema_version": { "bsonType": "string" },
+    "created_at": { "bsonType": "date" },
+    "updated_at": { "bsonType": "date" },
+    "ingested_at": { "bsonType": "date" },
+    "feed_id": { "bsonType": ["string", "null"] },
+    "source": {
+      "bsonType": "object",
+      "required": ["type", "name", "reference_id"],
+      "properties": {
+        "type": { "enum": ["community", "commercial", "vendor"] },
+        "name": { "bsonType": "string" },
+        "vendor": { "bsonType": ["string", "null"] },
+        "source_url": { "bsonType": ["string", "null"] },
+        "license": { "bsonType": ["string", "null"] },
+        "reference_id": { "bsonType": "string" }
+      }
+    },
+    "severity": {
+      "bsonType": ["object", "null"],
+      "properties": {
+        "level": { "enum": ["info", "low", "medium", "high", "critical"] },
+        "score": { "bsonType": "int", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "confidence": { "bsonType": ["int", "null"], "minimum": 0, "maximum": 100 },
+    "normalized_tags": {
+      "bsonType": ["array", "null"],
+      "items": { "bsonType": "string", "pattern": "^[a-z0-9_\\-]{1,64}$" },
+      "maxItems": 512
+    },
+    "indicators": {
+      "bsonType": ["array", "null"],
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "type": { "bsonType": "string" },
+          "value": { "bsonType": "string", "maxLength": 2048 },
+          "context": { "bsonType": "object" },
+          "first_seen": { "bsonType": ["date", "null"] },
+          "last_seen": { "bsonType": ["date", "null"] }
+        }
+      }
+    },
+    "references": {
+      "bsonType": ["array", "null"],
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "type": { "enum": ["url", "advisory", "commit", "ticket"] },
+          "reference_id": { "bsonType": "string" },
+          "title": { "bsonType": ["string", "null"] },
+          "publisher": { "bsonType": ["string", "null"] }
+        }
+      }
+    },
+    "extensions": { "bsonType": ["object", "null"] },
+    "enrichment": {
+      "bsonType": ["object", "null"],
+      "properties": {
+        "flags": {
+          "bsonType": ["object", "null"],
+          "properties": { "geolocation_done": { "bsonType": ["bool", "null"] } }
+        },
+        "hashes": {
+          "bsonType": ["object", "null"],
+          "properties": {
+            "sha256": { "bsonType": ["string", "null"], "maxLength": 64, "minLength": 64 },
+            "sha1": { "bsonType": ["string", "null"], "maxLength": 40, "minLength": 40 },
+            "md5": { "bsonType": ["string", "null"], "maxLength": 32, "minLength": 32 }
+          }
+        }
+      }
+    },
+    "raw": { "bsonType": ["object", "null"] },
+    "history": { "bsonType": ["array", "null"] },
+    "audit": { "bsonType": ["object", "null"] }
+  }
+}
+```
+
+### security_bulletins
+
+The security_bulletins collection stores vendor or aggregator advisories, including CVEs where applicable. Bulletins may link to indicators and include references for authoritative tracking. Metadata fields cover disclosure timeline, affected products, and patch or mitigation guidance.
+
+Schema highlights:
+
+- Required fields: _id, schema_version, created_at, updated_at, ingested_at, source, references[], title, summary, published_at, severity, affected_products[], patched (bool).
+- Types: published_at, updated_at as timestamps; affected_products as array of strings; CVSS vectors as strings; references array with defined subfields; optional indicators array for bulletin-linked indicators.
+- Extensions: vendor-specific fields captured in a map.
+- Patch status: patched boolean.
+
+Table 5: security_bulletins Fields and Constraints
+
+| Field/Subfield                     | Type            | Required | Validation Notes                                                                                 |
+|-----------------------------------|-----------------|----------|--------------------------------------------------------------------------------------------------|
+| schema_version                    | string          | Yes      | Non-empty string.                                                                                |
+| created_at, updated_at            | timestamp       | Yes      | bsonType “date”.                                                                                 |
+| ingested_at                       | timestamp       | Yes      | bsonType “date”.                                                                                 |
+| bulletin_id                       | string          | No       | Stable ID if provided by source.                                                                 |
+| source                            | object          | Yes      | Subfields as in Table 3; reference_id required.                                                 |
+| title                             | string          | Yes      | Non-empty; length ≤ 512.                                                                         |
+| summary                           | string          | Yes      | Non-empty; length ≤ 8192.                                                                        |
+| published_at                      | timestamp       | Yes      | bsonType “date”.                                                                                 |
+| updated_at                        | timestamp       | Yes      | bsonType “date”.                                                                                 |
+| severity                          | object          | Yes      | level enum; score int 0–100.                                                                     |
+| cve_ids[]                         | string          | No       | Each CVE like “CVE-YYYY-NNNN”.                                                                  |
+| cvss_v3_score                     | double          | No       | 0.0–10.0.                                                                                        |
+| cvss_v3_vector                    | string          | No       | CVSS v3 vector string.                                                                           |
+| affected_products[]               | string          | Yes      | Array of product names; length ≤ 4096.                                                          |
+| patched                           | bool            | Yes      | Patch status.                                                                                    |
+| references[]                      | object          | Yes      | type enum, reference_id string, title string, publisher string.                                  |
+| indicators[]                      | object          | No       | As in Table 3; optional linkage to bulletin content.                                             |
+| extensions                        | object          | No       | Vendor-specific metadata map.                                                                    |
+| raw                               | object          | No       | Optional snapshot of original bulletin.                                                         |
+| history, audit                    | object/array    | No       | Change tracking and audit metadata.                                                              |
+
+Example document:
+
+```json
+{
+  "_id": { "$oid": "6700f1b3a1d2c34f7bd08abd" },
+  "schema_version": "1.0.0",
+  "created_at": { "$date": "2025-10-30T01:02:00Z" },
+  "updated_at": { "$date": "2025-10-30T01:05:00Z" },
+  "ingested_at": { "$date": "2025-10-30T01:01:00Z" },
+  "bulletin_id": "bull-vendorX-2025-1234",
+  "source": {
+    "type": "vendor",
+    "name": "VendorX Security",
+    "vendor": "VendorX",
+    "source_url": "https://vendorx.example.com/security/bulletins",
+    "license": "VendorX terms",
+    "reference_id": "vendorx:bulletin:2025-1234"
+  },
+  "title": "Critical Patch for XYZ Service",
+  "summary": "A critical vulnerability in XYZ Service allows remote code execution under certain conditions.",
+  "published_at": { "$date": "2025-10-29T15:00:00Z" },
+  "updated_at": { "$date": "2025-10-29T16:30:00Z" },
+  "severity": { "level": "critical", "score": 95 },
+  "cve_ids": ["CVE-2025-9876"],
+  "cvss_v3_score": 9.8,
+  "cvss_v3_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+  "affected_products": ["VendorX XYZ Service 2.1", "VendorX XYZ Service 2.0"],
+  "patched": true,
+  "references": [
+    { "type": "advisory", "reference_id": "https://vendorx.example.com/security/bulletins/2025-1234", "title": "VendorX Advisory 2025-1234", "publisher": "VendorX" }
+  ],
+  "indicators": [
+    { "type": "url", "value": "https://malicious.example.com/payload" }
+  ],
+  "extensions": { "vendorx": { "hotfix": "hf-xyz-2025", "impact": "remote_code_execution" } },
+  "raw": { "original_format": "vendor_json", "payload": { "id": "2025-1234" } },
+  "history": [],
+  "audit": { "who": "bulletin-ingestion", "when": { "$date": "2025-10-30T01:01:10Z" }, "action": "insert", "reason": "initial_load", "request_id": "req-67890" }
+}
+```
+
+JSON Schema (conceptual; to be enforced via MongoDB validator):
+
+```json
+{
+  "bsonType": "object",
+  "required": ["_id", "schema_version", "created_at", "updated_at", "ingested_at", "source", "title", "summary", "published_at", "updated_at", "severity", "affected_products", "patched", "references"],
+  "properties": {
+    "schema_version": { "bsonType": "string" },
+    "created_at": { "bsonType": "date" },
+    "updated_at": { "bsonType": "date" },
+    "ingested_at": { "bsonType": "date" },
+    "bulletin_id": { "bsonType": ["string", "null"] },
+    "source": {
+      "bsonType": "object",
+      "required": ["type", "name", "reference_id"],
+      "properties": {
+        "type": { "enum": ["community", "commercial", "vendor"] },
+        "name": { "bsonType": "string" },
+        "vendor": { "bsonType": ["string", "null"] },
+        "source_url": { "bsonType": ["string", "null"] },
+        "license": { "bsonType": ["string", "null"] },
+        "reference_id": { "bsonType": "string" }
+      }
+    },
+    "title": { "bsonType": "string", "maxLength": 512 },
+    "summary": { "bsonType": "string", "maxLength": 8192 },
+    "published_at": { "bsonType": "date" },
+    "updated_at": { "bsonType": "date" },
+    "severity": {
+      "bsonType": "object",
+      "required": ["level", "score"],
+      "properties": {
+        "level": { "enum": ["info", "low", "medium", "high", "critical"] },
+        "score": { "bsonType": "int", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "cve_ids": { "bsonType": ["array", "null"], "items": { "bsonType": "string" } },
+    "cvss_v3_score": { "bsonType": ["double", "null"], "minimum": 0.0, "maximum": 10.0 },
+    "cvss_v3_vector": { "bsonType": ["string", "null"] },
+    "affected_products": { "bsonType": "array", "items": { "bsonType": "string" }, "minItems": 1 },
+    "patched": { "bsonType": "bool" },
+    "references": {
+      "bsonType": "array",
+      "minItems": 1,
+      "items": {
+        "bsonType": "object",
+        "required": ["type", "reference_id", "title", "publisher"],
+        "properties": {
+          "type": { "enum": ["url", "advisory", "commit", "ticket"] },
+          "reference_id": { "bsonType": "string" },
+          "title": { "bsonType": "string" },
+          "publisher": { "bsonType": "string" }
+        }
+      }
+    },
+    "indicators": { "bsonType": ["array", "null"] },
+    "extensions": { "bsonType": ["object", "null"] },
+    "raw": { "bsonType": ["object", "null"] },
+    "history": { "bsonType": ["array", "null"] },
+    "audit": { "bsonType": ["object", "null"] }
+  }
+}
+```
+
+### anomaly_detections
+
+The anomaly_detections collection stores detection events generated by analytics, models, or rules. It supports status transitions, assignee tracking, and evidence objects that contribute to a decision. Entities refer to host, user, or device identifiers and link to related indicators when available.
+
+Schema highlights:
+
+- Required fields: _id, schema_version, created_at, updated_at, ingested_at, event_time, detection_rule_id_or_name, status, severity, entities[], confidence.
+- Types: event_time timestamp; status enum; severity object; confidence int 0–100; entities array of objects; evidence array of objects; related_indicators array of indicator objects; references optional for investigation tickets.
+- Extensions: model-specific details in a map.
+- Idempotency: anomaly_id recommended for stable upserts.
+
+Table 6: anomaly_detections Fields and Constraints
+
+| Field/Subfield                         | Type            | Required | Validation Notes                                                                                   |
+|----------------------------------------|-----------------|----------|----------------------------------------------------------------------------------------------------|
+| schema_version                         | string          | Yes      | Non-empty string.                                                                                  |
+| created_at, updated_at                 | timestamp       | Yes      | bsonType “date”.                                                                                   |
+| ingested_at                            | timestamp       | Yes      | bsonType “date”.                                                                                   |
+| event_time                             | timestamp       | Yes      | bsonType “date”.                                                                                   |
+| anomaly_id                             | string          | No       | Stable ID for upsert; unique partial index candidate.                                              |
+| detection_rule_id_or_name              | string          | Yes      | Non-empty.                                                                                         |
+| status                                 | enum            | Yes      | “open”, “triage”, “investigating”, “resolved”, “false_positive”, “suppressed”.                     |
+| severity                               | object          | Yes      | level enum; score int 0–100.                                                                       |
+| confidence                             | int             | Yes      | 0–100 inclusive.                                                                                   |
+| entities[]                             | object          | Yes      | type (enum: host, user, device), id (string), name (string), labels (array[string], optional).     |
+| evidence[]                             | object          | No       | type (string), content (string), timestamp (timestamp), score (int, optional).                     |
+| related_indicators[]                   | object          | No       | As in Table 3; optional linkage to indicators.                                                     |
+| references[]                           | object          | No       | type enum; reference_id string; title/publisher optional.                                         |
+| extensions                             | object          | No       | Model- or pipeline-specific details.                                                               |
+| raw                                    | object          | No       | Optional snapshot of original detection event.                                                     |
+| audit                                  | object          | No       | Audit metadata.                                                                                    |
+| history                                | array[object]   | No       | Change tracking entries.                                                                           |
+
+Example document:
+
+```json
+{
+  "_id": { "$oid": "6700f1b3a1d2c34f7bd08abe" },
+  "schema_version": "1.0.0",
+  "created_at": { "$date": "2025-10-30T01:10:00Z" },
+  "updated_at": { "$date": "2025-10-30T01:10:00Z" },
+  "ingested_at": { "$date": "2025-10-30T01:09:00Z" },
+  "event_time": { "$date": "2025-10-30T01:08:00Z" },
+  "anomaly_id": "ano-xyz-2025-0001",
+  "detection_rule_id_or_name": "rule-rare-login-geo",
+  "status": "triage",
+  "severity": { "level": "high", "score": 80 },
+  "confidence": 85,
+  "entities": [
+    { "type": "user", "id": "alice@example.com", "name": "Alice Example", "labels": ["finance", "admin"] },
+    { "type": "device", "id": "host-1234", "name": "host-1234", "labels": ["laptop", "encrypted"] }
+  ],
+  "evidence": [
+    { "type": "login_attempt", "content": "Unusual login from atypical geo", "timestamp": { "$date": "2025-10-30T01:08:05Z" }, "score": 40 },
+    { "type": "ip_reputation", "content": "IP has low reputation score", "timestamp": { "$date": "2025-10-30T01:08:10Z" }, "score": 45 }
+  ],
+  "related_indicators": [
+    { "type": "ip", "value": "198.51.100.5", "context": { "asn": "AS64500" }, "first_seen": { "$date": "2025-10-30T01:05:00Z" }, "last_seen": { "$date": "2025-10-30T01:08:00Z" } }
+  ],
+  "references": [
+    { "type": "ticket", "reference_id": "INC-2025-1234", "title": "Investigate rare login", "publisher": "SecOps" }
+  ],
+  "extensions": { "model": { "version": "v3.2", "threshold": 0.82 } },
+  "raw": { "event_kind": "detection", "payload": { "signal_id": "sig-abc" } },
+  "audit": { "who": "detection-engine", "when": { "$date": "2025-10-30T01:09:05Z" }, "action": "insert", "reason": "rule_trigger", "request_id": "req-00017" },
+  "history": []
+}
+```
+
+JSON Schema (conceptual; to be enforced via MongoDB validator):
+
+```json
+{
+  "bsonType": "object",
+  "required": ["_id", "schema_version", "created_at", "updated_at", "ingested_at", "event_time", "detection_rule_id_or_name", "status", "severity", "confidence", "entities"],
+  "properties": {
+    "schema_version": { "bsonType": "string" },
+    "created_at": { "bsonType": "date" },
+    "updated_at": { "bsonType": "date" },
+    "ingested_at": { "bsonType": "date" },
+    "event_time": { "bsonType": "date" },
+    "anomaly_id": { "bsonType": ["string", "null"] },
+    "detection_rule_id_or_name": { "bsonType": "string" },
+    "status": { "enum": ["open", "triage", "investigating", "resolved", "false_positive", "suppressed"] },
+    "severity": {
+      "bsonType": "object",
+      "required": ["level", "score"],
+      "properties": {
+        "level": { "enum": ["info", "low", "medium", "high", "critical"] },
+        "score": { "bsonType": "int", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "confidence": { "bsonType": "int", "minimum": 0, "maximum": 100 },
+    "entities": {
+      "bsonType": "array",
+      "minItems": 1,
+      "items": {
+        "bsonType": "object",
+        "required": ["type", "id", "name"],
+        "properties": {
+          "type": { "enum": ["host", "user", "device"] },
+          "id": { "bsonType": "string" },
+          "name": { "bsonType": "string" },
+          "labels": { "bsonType": ["array", "null"], "items": { "bsonType": "string" } }
+        }
+      }
+    },
+    "evidence": { "bsonType": ["array", "null"], "items": { "bsonType": "object", "properties": { "type": { "bsonType": "string" }, "content": { "bsonType": "string" }, "timestamp": { "bsonType": "date" }, "score": { "bsonType": ["int", "null"], "minimum": 0, "maximum": 100 } } } },
+    "related_indicators": { "bsonType": ["array", "null"] },
+    "references": { "bsonType": ["array", "null"] },
+    "extensions": { "bsonType": ["object", "null"] },
+    "raw": { "bsonType": ["object", "null"] },
+    "audit": { "bsonType": ["object", "null"] },
+    "history": { "bsonType": ["array", "null"] }
+  }
+}
+```
+
+## Indexing Strategy and Query Patterns
+
+Indexes are chosen to optimize common queries while minimizing write overhead. Compound indexes align to filters used together—time windows with source or severity; status transitions with time for anomalies; tag-based searches for targeted triage; and lookup paths for enrichment and references. Text indexes are included but restricted to fields that benefit full-text search, such as titles and summaries for bulletins. Partial indexes narrow the indexed subset to active or high-value records, reducing storage and improving write performance. Idempotency is supported with partial unique indexes on canonical IDs.
+
+Table 7: Index Definitions Overview
+
+| Collection             | Index Key(s)                                              | Options                                 | Purpose                                                                                  |
+|------------------------|-----------------------------------------------------------|------------------------------------------|------------------------------------------------------------------------------------------|
+| raw_threat_feeds       | ingested_at:1, source.name:1, severity.score:1           | N/A                                      | Fast filters by ingestion time, source, severity.                                        |
+| raw_threat_feeds       | normalized_tags:1                                         | N/A                                      | Tag-based filtering.                                                                     |
+| raw_threat_feeds       | indicators.value:1, indicators.type:1                     | N/A                                      | Indicator lookup by value/type.                                                          |
+| raw_threat_feeds       | enrichment.hashes.sha256:1                                | Partial index where enrichment.hashes exists | Deduplication via SHA-256.                                                              |
+| raw_threat_feeds       | feed_id:1                                                 | Partial unique where feed_id exists      | Idempotent ingestion.                                                                    |
+| raw_threat_feeds       | $**:**text on title and references[].title                | Weights: title=5, references.title=1     | Full-text search on feed record titles and referenced titles.                            |
+| security_bulletins     | published_at:1, updated_at:1, severity.score:1            | N/A                                      | Time-based queries and severity filters.                                                 |
+| security_bulletins     | cve_ids:1                                                 | N/A                                      | Rapid CVE lookup.                                                                        |
+| security_bulletins     | affected_products:1                                       | N/A                                      | Product-driven queries.                                                                  |
+| security_bulletins     | references.reference_id:1                                 | N/A                                      | Quick reference-based retrieval.                                                         |
+| security_bulletins     | bulletin_id:1                                             | Partial unique where bulletin_id exists  | Idempotent upsert.                                                                       |
+| security_bulletins     | $**:**text on title, summary                               | Weights: title=5, summary=1              | Full-text search.                                                                        |
+| anomaly_detections     | event_time:1, status:1, severity.score:1                  | Compound for triage views                | Time-window filters with status and severity.                                            |
+| anomaly_detections     | entities.id:1, entities.type:1                            | N/A                                      | Entity-based investigations.                                                             |
+| anomaly_detections     | related_indicators.value:1, related_indicators.type:1     | N/A                                      | Indicator linkage for correlation.                                                       |
+| anomaly_detections     | references.reference_id:1                                 | N/A                                      | Investigation ticket lookup.                                                             |
+| anomaly_detections     | anomaly_id:1                                              | Partial unique where anomaly_id exists   | Idempotent upsert.                                                                       |
+| anomaly_detections     | status:1, updated_at:1                                    | Partial index where status in open set   | Operational queues for triage and investigation.                                         |
+
+### Query Patterns per Collection
+
+Common queries for raw_threat_feeds include time-window retrieval by ingested_at, filtering by source.name and severity.score, tag-based searches using normalized_tags, and indicator lookups by indicators.value and indicators.type. Updates frequently append new indicators, adjust severity or confidence, and set enrichment flags or hashes; idempotent updates rely on feed_id. Security bulletins often filter by published_at and updated_at ranges, severity score, CVEs in cve_ids, affected_products containment, and perform full-text search on title and summary. Updates reflect patch status changes and enriched metadata. Anomaly_detections are typically queried by event_time ranges, status transitions, severity score thresholds, entity filters by entities.id and entities.type, and linked indicators via related_indicators.value and related_indicators.type. Updates adjust status, assignee fields (if introduced later), and close out records upon resolution.
+
+## Data Lifecycle and Retention Policies
+
+Lifecycle management balances compliance, auditability, and cost. Raw feeds are retained for a short to medium window, for example 90 days in the hot tier and up to 12 months in warm/cold tiers, subject to regulatory requirements. Bulletins have longer retention given their authoritative nature; hot retention could be 365 days with warm/cold extension as needed. Anomaly detections sit in the middle, with operational retention of 180 days in the hot tier, extended in warm/cold tiers depending on investigation and audit mandates. Archival involves exporting documents to cold storage or an archive collection with minimal indexing and constrained access. TTL indexes are applied to derivative collections or to documents flagged for deletion when retention expires and no legal hold applies.
+
+Table 8: Retention Matrix
+
+| Collection            | Hot Tier (Indexed)                               | Warm Tier (Sparse Indexed)                               | Cold Tier (Archived/Constrained Access)                  |
+|-----------------------|---------------------------------------------------|-----------------------------------------------------------|----------------------------------------------------------|
+| raw_threat_feeds      | Retain indexed for ~90 days; support TTL deletion | Move to warm after ~90 days; retain up to ~12 months      | Archive beyond ~12 months; minimal indexes               |
+| security_bulletins    | Retain indexed for ~365 days                      | Warm tier up to ~3 years                                  | Archive beyond ~3 years; long-term compliance            |
+| anomaly_detections    | Retain indexed for ~180 days                      | Warm tier up to ~1 year                                   | Archive beyond ~1 year; restricted access                |
+
+Archival operations copy documents to archive collections or object storage and drop or anonymize fields in the hot tier as required by policy. Deletion workflows honor legal holds: when a document is under hold, TTL-based deletion is suppressed until the hold is cleared. Periodic audits confirm adherence to the schedule and document exceptions.
+
+## Operational Policies: Ingestion, Deduplication, and Idempotency
+
+Ingestion pipelines implement validation at the edge, followed by database-side validation enforcement. Idempotent upserts rely on canonical identifiers: feed_id for raw feeds, bulletin_id for bulletins, and anomaly_id for anomalies. When natural IDs are missing, deterministic IDs are derived from normalized source, content hash, and key attributes such as titles or indicator values. Partial unique indexes enforce uniqueness only when the relevant ID is present. Deduplication leverages content hashing (e.g., enrichment.hashes.sha256) and composite keys of source and normalized fields. Staging and backfill procedures isolate bulk loads, validate, and apply compaction jobs that merge extensions or remove redundant fields. Migration strategies use schema_version to introduce changes while preserving compatibility with historical documents.
+
+Table 9: Idempotency Keys and Partial Unique Index Definitions
+
+| Collection            | Partial Unique Index Key(s)         | Filter Condition                                 | Purpose                                |
+|-----------------------|-------------------------------------|--------------------------------------------------|----------------------------------------|
+| raw_threat_feeds      | feed_id:1                            | feed_id exists                                   | Prevent duplicate feed records.        |
+| raw_threat_feeds      | enrichment.hashes.sha256:1           | enrichment.hashes.sha256 exists                  | Deduplicate by content hash.           |
+| security_bulletins    | bulletin_id:1                        | bulletin_id exists                               | Ensure unique vendor bulletins.        |
+| anomaly_detections    | anomaly_id:1                         | anomaly_id exists                                | Idempotent anomaly upserts.            |
+
+## Security, Compliance, and Audit
+
+Data protection requires encryption at rest and in transit, role-based access control with least privilege, and field-level controls for sensitive elements. The audit block captures who performed an action, when, what changed, and why, while the history block records field-level changes. Redaction strategies target sensitive identifiers in extensions and evidence, and hashing or tokenization is applied where appropriate. Compliance measures include watermarking via schema_version, explicit retention schedules, legal holds, and data subject request handling in extensions or dedicated metadata collections. Query logging and rate limiting guard against data exfiltration and abuse.
+
+Table 10: Audit Fields and Change History Schema
+
+| Block    | Fields                                   | Description                                                       |
+|----------|-------------------------------------------|-------------------------------------------------------------------|
+| audit    | who (string), when (timestamp), action (string), reason (string, optional), request_id (string) | Records operational actions and provenance.                       |
+| history  | at (timestamp), field (string), old_value (mixed), new_value (mixed), actor (string) | Captures field-level changes over time for traceability.          |
+
+## Deliverables and File Outputs
+
+The complete design and JSON schema definitions are to be saved to database/mongodb_collections.json. The file will contain collection definitions, schema validation rules, index specifications, and example documents. If configuration is environment-specific, include a separate mapping or comments within the file indicating how the settings should vary across environments. Validation commands for MongoDB validators and recommended index creation scripts should be included in the same file or in a companion script, with inline documentation and examples.
+
+Example JSON document for raw_threat_feeds (duplicate for inclusion in the saved file if desired):
+
+```json
+{
+  "_id": { "$oid": "6700f1b3a1d2c34f7bd08abc" },
+  "schema_version": "1.0.0",
+  "created_at": { "$date": "2025-10-30T01:00:00Z" },
+  "updated_at": { "$date": "2025-10-30T01:00:00Z" },
+  "ingested_at": { "$date": "2025-10-30T00:59:00Z" },
+  "feed_id": "feed-com-acme-v1-ip-198.51.100.5",
+  "source": {
+    "type": "commercial",
+    "name": "acme_threat_intel",
+    "vendor": "Acme Intel LLC",
+    "source_url": "https://intel.example.com/feed/v1",
+    "license": "Acme Commercial License",
+    "reference_id": "acme:feed:v1:record:abc123"
+  },
+  "severity": { "level": "medium", "score": 60 },
+  "confidence": 75,
+  "normalized_tags": ["malware", "command-and-control", "active"],
+  "indicators": [
+    {
+      "type": "ip",
+      "value": "198.51.100.5",
+      "context": { "port": 443, "protocol": "tcp" },
+      "first_seen": { "$date": "2025-10-29T12:00:00Z" },
+      "last_seen": { "$date": "2025-10-30T00:30:00Z" }
+    }
+  ],
+  "references": [
+    { "type": "url", "reference_id": "https://intel.example.com/indicator/198.51.100.5", "title": "Acme Indicator Detail", "publisher": "Acme Intel LLC" }
+  ],
+  "extensions": { "feed_specific": { "dataset": "ip_rep", "epoch": 7 } },
+  "enrichment": {
+    "flags": { "geolocation_done": true },
+    "hashes": { "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }
+  },
+  "raw": { "received_at": "2025-10-30T00:58:55Z", "payload": { "record_key": "abc123", "indicator": "198.51.100.5" } },
+  "history": [],
+  "audit": { "who": "ingestion-service", "when": { "$date": "2025-10-30T00:59:10Z" }, "action": "insert", "reason": "initial_load", "request_id": "req-12345" }
+}
+```
+
+Example JSON document for security_bulletins (to be included in the saved file):
+
+```json
+{
+  "_id": { "$oid": "6700f1b3a1d2c34f7bd08abd" },
+  "schema_version": "1.0.0",
+  "created_at": { "$date": "2025-10-30T01:02:00Z" },
+  "updated_at": { "$date": "2025-10-30T01:05:00Z" },
+  "ingested_at": { "$date": "2025-10-30T01:01:00Z" },
+  "bulletin_id": "bull-vendorX-2025-1234",
+  "source": {
+    "type": "vendor",
+    "name": "VendorX Security",
+    "vendor": "VendorX",
+    "source_url": "https://vendorx.example.com/security/bulletins",
+    "license": "VendorX terms",
+    "reference_id": "vendorx:bulletin:2025-1234"
+  },
+  "title": "Critical Patch for XYZ Service",
+  "summary": "A critical vulnerability in XYZ Service allows remote code execution under certain conditions.",
+  "published_at": { "$date": "2025-10-29T15:00:00Z" },
+  "updated_at": { "$date": "2025-10-29T16:30:00Z" },
+  "severity": { "level": "critical", "score": 95 },
+  "cve_ids": ["CVE-2025-9876"],
+  "cvss_v3_score": 9.8,
+  "cvss_v3_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+  "affected_products": ["VendorX XYZ Service 2.1", "VendorX XYZ Service 2.0"],
+  "patched": true,
+  "references": [
+    { "type": "advisory", "reference_id": "https://vendorx.example.com/security/bulletins/2025-1234", "title": "VendorX Advisory 2025-1234", "publisher": "VendorX" }
+  ],
+  "indicators": [
+    { "type": "url", "value": "https://malicious.example.com/payload" }
+  ],
+  "extensions": { "vendorx": { "hotfix": "hf-xyz-2025", "impact": "remote_code_execution" } },
+  "raw": { "original_format": "vendor_json", "payload": { "id": "2025-1234" } },
+  "history": [],
+  "audit": { "who": "bulletin-ingestion", "when": { "$date": "2025-10-30T01:01:10Z" }, "action": "insert", "reason": "initial_load", "request_id": "req-67890" }
+}
+```
+
+Example JSON document for anomaly_detections (to be included in the saved file):
+
+```json
+{
+  "_id": { "$oid": "6700f1b3a1d2c34f7bd08abe" },
+  "schema_version": "1.0.0",
+  "created_at": { "$date": "2025-10-30T01:10:00Z" },
+  "updated_at": { "$date": "2025-10-30T01:10:00Z" },
+  "ingested_at": { "$date": "2025-10-30T01:09:00Z" },
+  "event_time": { "$date": "2025-10-30T01:08:00Z" },
+  "anomaly_id": "ano-xyz-2025-0001",
+  "detection_rule_id_or_name": "rule-rare-login-geo",
+  "status": "triage",
+  "severity": { "level": "high", "score": 80 },
+  "confidence": 85,
+  "entities": [
+    { "type": "user", "id": "alice@example.com", "name": "Alice Example", "labels": ["finance", "admin"] },
+    { "type": "device", "id": "host-1234", "name": "host-1234", "labels": ["laptop", "encrypted"] }
+  ],
+  "evidence": [
+    { "type": "login_attempt", "content": "Unusual login from atypical geo", "timestamp": { "$date": "2025-10-30T01:08:05Z" }, "score": 40 },
+    { "type": "ip_reputation", "content": "IP has low reputation score", "timestamp": { "$date": "2025-10-30T01:08:10Z" }, "score": 45 }
+  ],
+  "related_indicators": [
+    { "type": "ip", "value": "198.51.100.5", "context": { "asn": "AS64500" }, "first_seen": { "$date": "2025-10-30T01:05:00Z" }, "last_seen": { "$date": "2025-10-30T01:08:00Z" } }
+  ],
+  "references": [
+    { "type": "ticket", "reference_id": "INC-2025-1234", "title": "Investigate rare login", "publisher": "SecOps" }
+  ],
+  "extensions": { "model": { "version": "v3.2", "threshold": 0.82 } },
+  "raw": { "event_kind": "detection", "payload": { "signal_id": "sig-abc" } },
+  "audit": { "who": "detection-engine", "when": { "$date": "2025-10-30T01:09:05Z" }, "action": "insert", "reason": "rule_trigger", "request_id": "req-00017" },
+  "history": []
+}
+```
+
+Validation and index creation commands (examples for operator guidance; include verbatim or adapt in saved artifacts):
+
+```javascript
+// Apply validators (conceptual; adapt per collection)
+db.runCommand({
+  collMod: "raw_threat_feeds",
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["_id", "schema_version", "created_at", "updated_at", "ingested_at", "source"],
+      properties: {
+        schema_version: { bsonType: "string" },
+        created_at: { bsonType: "date" },
+        updated_at: { bsonType: "date" },
+        ingested_at: { bsonType: "date" },
+        source: {
+          bsonType: "object",
+          required: ["type", "name", "reference_id"],
+          properties: {
+            type: { enum: ["community", "commercial", "vendor"] },
+            name: { bsonType: "string" },
+            reference_id: { bsonType: "string" }
+          }
+        }
+      }
+    }
+  },
+  validationLevel: "moderate"
+});
+
+// Create indexes (examples)
+db.raw_threat_feeds.createIndex({ "ingested_at": 1, "source.name": 1, "severity.score": 1 });
+db.raw_threat_feeds.createIndex({ "normalized_tags": 1 });
+db.raw_threat_feeds.createIndex({ "indicators.value": 1, "indicators.type": 1 });
+db.raw_threat_feeds.createIndex({ "enrichment.hashes.sha256": 1 }, { partialFilterExpression: { "enrichment.hashes.sha256": { $exists: true } } });
+db.raw_threat_feeds.createIndex({ "feed_id": 1 }, { partialFilterExpression: { "feed_id": { $exists: true } }, unique: true });
+db.raw_threat_feeds.createIndex({ "$**": "text", "references.title": "text" }, { weights: { title: 5, references: 1 } });
+
+db.security_bulletins.createIndex({ "published_at": 1, "updated_at": 1, "severity.score": 1 });
+db.security_bulletins.createIndex({ "cve_ids": 1 });
+db.security_bulletins.createIndex({ "affected_products": 1 });
+db.security_bulletins.createIndex({ "references.reference_id": 1 });
+db.security_bulletins.createIndex({ "bulletin_id": 1 }, { partialFilterExpression: { "bulletin_id": { $exists: true } }, unique: true });
+db.security_bulletins.createIndex({ "$**": "text", "title": "text", "summary": "text" }, { weights: { title: 5, summary: 1 } });
+
+db.anomaly_detections.createIndex({ "event_time": 1, "status": 1, "severity.score": 1 });
+db.anomaly_detections.createIndex({ "entities.id": 1, "entities.type": 1 });
+db.anomaly_detections.createIndex({ "related_indicators.value": 1, "related_indicators.type": 1 });
+db.anomaly_detections.createIndex({ "references.reference_id": 1 });
+db.anomaly_detections.createIndex({ "anomaly_id": 1 }, { partialFilterExpression: { "anomaly_id": { $exists: true } }, unique: true });
+db.anomaly_detections.createIndex({ "status": 1, "updated_at": 1 }, { partialFilterExpression: { "status": { $in: ["open", "triage", "investigating"] } } });
+```
+
+## Validation, Testing, and Rollout Plan
+
+Testing ensures that validators reject invalid documents, that indexes perform under realistic workloads, and that lifecycle operations execute as designed. Negative tests confirm rejection of malformed types, missing required fields, and violations of enum constraints. Query performance is measured on time-window, tag-based, indicator, and entity filters; text search accuracy is verified on bulletins and feeds. Rollout proceeds in stages: apply validators in a staging environment, review metrics on query latency and write throughput, then deploy to production with appropriate monitoring and rollback procedures. Rollbacks involve reverting validatorstrictness or removing newly added indexes, with feature flags controlling write paths during transitions.
+
+Table 11: Test Case Matrix
+
+| Area              | Test Objective                                         | Example Tests                                                                                       |
+|-------------------|---------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| Validation        | Reject invalid schemas                                 | Missing required fields; wrong types; enum violations; out-of-range scores; pattern mismatches.     |
+| Idempotency       | Prevent duplicates                                     | Upsert with same feed_id/bulletin_id/anomaly_id; duplicate content hash suppression.                |
+| Query Performance | Optimize common filters                                | Time-window queries by ingested_at/event_time/published_at; source filters; severity thresholds.    |
+| Tag Search        | Efficient tag filters                                  | normalized_tags queries; overlapping tags; large tag arrays.                                        |
+| Indicator Lookup  | Fast lookups by value/type                             | indicators.value/type for feeds; related_indicators for anomalies.                                  |
+| Lifecycle         | TTL and archival correctness                           | TTL index expiration; archival export; legal hold suppression; deletion auditing.                   |
+| Text Search       | Accurate retrieval                                     | Title/summary query on bulletins; feed titles and reference titles; relevance ordering.             |
+
+## Monitoring, Maintenance, and Change Management
+
+Ongoing operations require monitoring index usage, query latency, and storage growth. Index bloat is mitigated through periodic re-evaluation, removal of unused indexes, and partial indexes that reduce overhead. Schema evolution follows semantic versioning of schema_version with forward-compatible additions and documented deprecations; migration scripts update documents as needed. Backfills for enrichment or deduplication run during maintenance windows with progress tracking and resumable pipelines. Documentation must remain current, and training ensures teams understand validation rules, index strategies, and lifecycle policies.
+
+## Information Gaps and Assumptions
+
+Several environment and organizational parameters are not provided and must be clarified to finalize configuration:
+
+- MongoDB version and feature availability (e.g., version for partial indexes, validators, and any特定 features).
+- Expected data volumes (daily ingest, peak throughput) to calibrate sharding, index selectivity, and storage planning.
+- Workload distribution (read vs write ratio, query patterns) to refine compound indexes and partial indexes.
+- Regulatory/compliance requirements affecting retention durations, encryption, and audit controls.
+- Source formats and ingestion cadence for threat feeds, bulletins, and anomaly detectors to optimize extensions and parsing pipelines.
+- High-availability and disaster recovery objectives (RPO/RTO) and backup/restore policies.
+- Access control model and segregation of duties requirements for operations and compliance teams.
+- Deployment environment constraints (managed service vs self-hosted, storage classes for hot/warm/cold tiers).
+- Text search relevance requirements and multilingual needs to finalize text index configuration.
+- Legal hold handling specifics to implement suppression of TTL deletion and audit requirements.
+
+Where gaps exist, this blueprint provides reasonable defaults and generic policies that should be adapted once the above parameters are known.
+
+## Conclusion
+
+This blueprint defines a consistent, robust, and scalable design for three core collections that capture raw threat feeds, security bulletins, and anomaly detections. By enforcing a uniform document envelope, strict validation, targeted indexes, and lifecycle policies, the platform achieves operational clarity and performance while preserving extensibility for future sources and analytics. The inclusion of idempotency keys, audit trails, and archival hooks addresses enterprise-grade requirements for reliability and compliance. Final deployment should proceed with the outlined validation, testing, and rollout plan, and incorporate environment-specific parameters as they become available.

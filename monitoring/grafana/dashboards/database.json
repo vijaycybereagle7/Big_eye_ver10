@@ -1,0 +1,245 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Database Monitoring",
+    "tags": ["database", "postgresql", "mongodb", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "PostgreSQL Instance Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "pg_up",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DOWN", "color": "red"},
+                  "1": {"text": "UP", "color": "green"}
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "MongoDB Instance Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "mongodb_up",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DOWN", "color": "red"},
+                  "1": {"text": "UP", "color": "green"}
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Active Database Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(pg_stat_database_numbackends)",
+            "legendFormat": "PostgreSQL"
+          },
+          {
+            "expr": "sum(mongodb_connections{state=\"active\"})",
+            "legendFormat": "MongoDB"
+          }
+        ],
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "PostgreSQL Connection Pool",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends",
+            "legendFormat": "{{instance}} - {{datname}}"
+          },
+          {
+            "expr": "pg_settings_max_connections",
+            "legendFormat": "{{instance}} - Max Connections"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Connections",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+      },
+      {
+        "id": 5,
+        "title": "Database Query Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blk_read_time[5m])",
+            "legendFormat": "{{instance}} - {{datname}} - Read Time"
+          },
+          {
+            "expr": "rate(pg_stat_database_blk_write_time[5m])",
+            "legendFormat": "{{instance}} - {{datname}} - Write Time"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "ms",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+      },
+      {
+        "id": 6,
+        "title": "Database Disk Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100",
+            "legendFormat": "{{instance}} - {{mountpoint}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Usage %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+      },
+      {
+        "id": 7,
+        "title": "Database I/O Operations",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blks_read[5m])",
+            "legendFormat": "{{instance}} - {{datname}} - Reads/sec"
+          },
+          {
+            "expr": "rate(pg_stat_database_blks_hit[5m])",
+            "legendFormat": "{{instance}} - {{datname}} - Hits/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Operations/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+      },
+      {
+        "id": 8,
+        "title": "MongoDB Operations",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mongodb_op_latencies_ops_total[5m])",
+            "legendFormat": "{{instance}} - {{type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Ops/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+      },
+      {
+        "id": 9,
+        "title": "Database Replication Lag",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "pg_replication_lag",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+      },
+      {
+        "id": 10,
+        "title": "Database Connections by State",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (state) (mongodb_connections)",
+            "legendFormat": "{{state}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30}
+      },
+      {
+        "id": 11,
+        "title": "Database Cache Hit Ratio",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blks_hit[5m]) / (rate(pg_stat_database_blks_read[5m]) + rate(pg_stat_database_blks_hit[5m])) * 100",
+            "legendFormat": "{{instance}} - {{datname}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Hit Ratio %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30}
+      },
+      {
+        "id": 12,
+        "title": "Database Slow Queries",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "pg_stat_activity_max_tx_duration",
+            "format": "table"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38}
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

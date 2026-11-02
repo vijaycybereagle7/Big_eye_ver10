@@ -1,0 +1,174 @@
+{
+  "_comment": "Threat Intelligence Collection Configuration Template",
+  "_comment": "Copy this file to threat_intel_config.json and fill in your API keys",
+  "_comment": "Only include API keys for services you want to use",
+  
+  "virustotal_api_key": "YOUR_VIRUSTOTAL_API_KEY_HERE",
+  
+  "abuseipdb_api_key": "YOUR_ABUSEIPDB_API_KEY_HERE",
+  
+  "google_safebrowsing_api_key": "YOUR_GOOGLE_SAFE_BROWSING_API_KEY_HERE",
+  
+  "otx_api_key": "YOUR_ALIENVAULT_OTX_API_KEY_HERE",
+  
+  "shodan_api_key": "YOUR_SHODAN_API_KEY_HERE",
+  
+  "securitytrails_api_key": "YOUR_SECURITYTRAILS_API_KEY_HERE",
+  
+  "phishtank_app_key": "YOUR_PHISHTANK_APP_KEY_HERE",
+  
+  "threatfox_api_key": null,
+  
+  "circl_username": "YOUR_CIRCL_USERNAME_HERE",
+  "circl_password": "YOUR_CIRCL_PASSWORD_HERE",
+  
+  "greynoise_api_key": "YOUR_GREYNOISE_API_KEY_HERE",
+  
+  "malwarebazaar_api_key": null,
+  
+  "urlhaus_api_key": null,
+  
+  "spamhaus_api_key": null,
+  
+  "rate_limit_delay": 1.0,
+  "max_requests_per_minute": 60,
+  
+  "output_directory": "threat_intel_results",
+  
+  "timeout_seconds": 30,
+  
+  "retry_attempts": 3,
+  
+  "retry_delay_seconds": 5,
+  
+  "enable_logging": true,
+  "log_level": "INFO",
+  "log_file": "threat_intel.log",
+  
+  "default_collectors": [
+    "virustotal",
+    "abuseipdb",
+    "urlhaus",
+    "malwarebazaar",
+    "threatfox"
+  ],
+  
+  "collector_priorities": {
+    "virustotal": 1,
+    "urlhaus": 2,
+    "malwarebazaar": 3,
+    "threatfox": 4,
+    "abuseipdb": 5,
+    "otx": 6,
+    "greynoise": 7,
+    "shodan": 8,
+    "securitytrails": 9,
+    "safebrowsing": 10,
+    "phishtank": 11,
+    "spamhaus": 12,
+    "circl": 13
+  },
+  
+  "confidence_weights": {
+    "virustotal": 0.9,
+    "urlhaus": 0.95,
+    "malwarebazaar": 0.9,
+    "threatfox": 0.85,
+    "abuseipdb": 0.7,
+    "otx": 0.8,
+    "greynoise": 0.8,
+    "shodan": 0.6,
+    "securitytrails": 0.6,
+    "safebrowsing": 0.9,
+    "phishtank": 0.85,
+    "spamhaus": 0.8,
+    "circl": 0.7
+  },
+  
+  "api_endpoints": {
+    "virustotal": "https://www.virustotal.com/api/v3",
+    "abuseipdb": "https://api.abuseipdb.com/api/v2",
+    "safebrowsing": "https://safebrowsing.googleapis.com/v4",
+    "otx": "https://otx.alienvault.com/api/v1",
+    "shodan": "https://api.shodan.io",
+    "securitytrails": "https://api.securitytrails.com/v1",
+    "urlhaus": "https://urlhaus-api.abuse.ch/v1",
+    "phishtank": "https://checkurl.phishtank.com/checkurl/",
+    "threatfox": "https://threatfox-api.abuse.ch/api/v1",
+    "circl": "https://hashlookup.circl.lu",
+    "greynoise": "https://api.greynoise.io/v2"
+  },
+  
+  "rate_limits": {
+    "virustotal": {
+      "requests_per_minute": 4,
+      "requests_per_day": 500
+    },
+    "abuseipdb": {
+      "requests_per_day": 1000
+    },
+    "safebrowsing": {
+      "requests_per_minute": 600,
+      "requests_per_day": 10000
+    },
+    "otx": {
+      "requests_per_day": 10000
+    },
+    "shodan": {
+      "requests_per_day": 100
+    },
+    "securitytrails": {
+      "requests_per_day": 100
+    },
+    "phishtank": {
+      "requests_per_hour": 1000
+    },
+    "threatfox": {
+      "requests_per_hour": 1000
+    },
+    "circl": {
+      "requests_per_hour": 100
+    },
+    "greynoise": {
+      "requests_per_hour": 1000
+    },
+    "malwarebazaar": {
+      "requests_per_hour": 1000
+    },
+    "urlhaus": {
+      "requests_per_hour": 1000
+    },
+    "spamhaus": {
+      "requests_per_hour": 1000
+    }
+  },
+  
+  "output_formats": {
+    "json": true,
+    "csv": false,
+    "xml": false,
+    "yaml": false
+  },
+  
+  "data_enrichment": {
+    "geoip_lookup": true,
+    "whois_lookup": true,
+    "reverse_dns": true,
+    "ssl_certificate_analysis": false,
+    "dns_analysis": true
+  },
+  
+  "filtering": {
+    "minimum_confidence": 0.3,
+    "exclude_low_confidence": false,
+    "exclude_clean_results": false,
+    "exclude_whitelisted": true
+  },
+  
+  "notifications": {
+    "enabled": false,
+    "webhook_url": null,
+    "email_notifications": false,
+    "slack_webhook": null
+  }
+}

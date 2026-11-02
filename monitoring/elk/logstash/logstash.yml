@@ -1,0 +1,54 @@
+# Logstash Configuration
+
+http.host: "0.0.0.0"
+path.config: /usr/share/logstash/pipeline
+
+# Pipeline Configuration
+pipeline.workers: 2
+pipeline.batch.size: 125
+pipeline.batch.delay: 50
+
+# JVM Configuration
+xms: 1g
+xmx: 2g
+
+# Path Configuration
+path.data: /usr/share/logstash/data
+
+# Dead Letter Queue
+dead_letter_queue.enable: true
+
+# Monitoring
+xpack.monitoring.enabled: false
+xpack.monitoring.elasticsearch.hosts: ["elasticsearch:9200"]
+
+# Node Configuration
+node.name: "cybersecurity-logstash"
+
+# Logging Configuration
+log.level: info
+log.format: json
+
+# Queue Configuration
+queue.type: memory
+queue.page_capacity: 64mb
+queue.max_events: 0
+queue.max_attempts: 3
+queue.disk.threshold.enabled: true
+queue.disk.threshold.bytes: 500mb
+queue.disk.threshold.check_interval: 5
+
+# Pipeline Settings
+pipeline.ecs_compatibility: v8
+
+# HTTP Settings
+http.host: "0.0.0.0"
+http.port: 9600
+
+# Path Settings
+path.config: /usr/share/logstash/pipeline
+path.data: /usr/share/logstash/data
+path.logs: /usr/share/logstash/logs
+
+# Ruby Settings
+ruby.format: text

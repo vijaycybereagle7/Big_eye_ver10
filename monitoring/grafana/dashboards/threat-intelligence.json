@@ -1,0 +1,228 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Threat Intelligence Monitoring",
+    "tags": ["threat-intelligence", "security", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Threat Feed Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "threat_feed_status",
+            "legendFormat": "{{feed_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DOWN", "color": "red"},
+                  "1": {"text": "UP", "color": "green"}
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Threat Detection Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(threats_detected_total[1h])",
+            "legendFormat": "{{feed_name}} - {{threat_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Threats/hour",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
+      },
+      {
+        "id": 3,
+        "title": "API Quota Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "api_usage_quota_percentage",
+            "legendFormat": "{{provider}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Usage %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
+      },
+      {
+        "id": 4,
+        "title": "Threat Intelligence Feed Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "threat_feed_response_time_seconds",
+            "legendFormat": "{{feed_name}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+      },
+      {
+        "id": 5,
+        "title": "Active Threats by Category",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (threat_category) (threats_detected_total)",
+            "legendFormat": "{{threat_category}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+      },
+      {
+        "id": 6,
+        "title": "Validation Throughput",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(validations_processed_total[5m])",
+            "legendFormat": "{{validation_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Validations/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
+      },
+      {
+        "id": 7,
+        "title": "Malicious IP Detections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(malicious_ip_detections_total[5m])",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Detections/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
+      },
+      {
+        "id": 8,
+        "title": "Threat Intelligence Feed Health",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "threat_feed_last_update",
+            "legendFormat": "{{feed_name}} - Last Update"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Unix Timestamp",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30}
+      },
+      {
+        "id": 9,
+        "title": "API Rate Limiting Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(api_rate_limit_exceeded_total[5m])",
+            "legendFormat": "{{provider}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Events/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30}
+      },
+      {
+        "id": 10,
+        "title": "Recent High-Priority Threats",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "threats_detected_total{severity=\"high\"}",
+            "format": "table"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38}
+      },
+      {
+        "id": 11,
+        "title": "Threat Feed Success Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(threat_feed_success_total[5m]) / (rate(threat_feed_success_total[5m]) + rate(threat_feed_failure_total[5m])) * 100",
+            "legendFormat": "{{feed_name}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Success Rate %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 46}
+      },
+      {
+        "id": 12,
+        "title": "Suspicious Activity Detection",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(suspicious_activity_detections_total[5m])",
+            "legendFormat": "{{activity_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Detections/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 46}
+      }
+    ],
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

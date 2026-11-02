@@ -1,0 +1,137 @@
+{
+  "access_control": {
+    "session_management": {
+      "timeout_minutes": 480,
+      "max_concurrent_sessions": 3,
+      "session_cleanup_interval": 3600,
+      "renew_on_activity": true
+    },
+    "password_policy": {
+      "min_length": 12,
+      "require_uppercase": true,
+      "require_lowercase": true,
+      "require_numbers": true,
+      "require_symbols": true,
+      "max_age_days": 90,
+      "history_count": 12,
+      "complexity_score": 8
+    },
+    "account_lockout": {
+      "max_failed_attempts": 5,
+      "lockout_duration_minutes": 60,
+      "notification_enabled": true
+    },
+    "authentication": {
+      "two_factor_required": false,
+      "two_factor_methods": ["totp", "sms", "email"],
+      "multi_factor_enabled": false,
+      "password_reset_expiry_hours": 24
+    },
+    "audit_logging": {
+      "enabled": true,
+      "log_all_actions": true,
+      "retention_days": 365,
+      "real_time_alerts": true,
+      "log_levels": ["create", "read", "update", "delete", "login", "logout", "permission_denied"]
+    }
+  },
+  "roles": {
+    "admin": {
+      "description": "System administrator with full access",
+      "permissions": ["admin", "audit", "user_management", "system_config"],
+      "resource_access": {
+        "user": ["read", "write", "delete", "create"],
+        "role": ["read", "write", "delete", "create"],
+        "data": ["read", "write", "delete", "create"],
+        "system": ["read", "write", "delete", "create", "configure"]
+      },
+      "restrictions": []
+    },
+    "user": {
+      "description": "Regular user with basic access",
+      "permissions": ["read"],
+      "resource_access": {
+        "data": ["read", "update"],
+        "profile": ["read", "update"]
+      },
+      "restrictions": [
+        "no_access_to_system_config",
+        "no_delete_privileges"
+      ]
+    },
+    "auditor": {
+      "description": "User with audit and reporting access",
+      "permissions": ["audit", "read"],
+      "resource_access": {
+        "audit_logs": ["read"],
+        "reports": ["read", "create", "export"],
+        "system_status": ["read"]
+      },
+      "restrictions": [
+        "no_user_modification",
+        "no_system_configuration"
+      ]
+    },
+    "security_officer": {
+      "description": "Security officer with security management access",
+      "permissions": ["security", "audit", "compliance"],
+      "resource_access": {
+        "security_logs": ["read", "analyze"],
+        "compliance": ["read", "manage"],
+        "intrusions": ["read", "respond"],
+        "firewall": ["read", "configure"]
+      },
+      "restrictions": [
+        "no_user_deletion",
+        "no_system_modification"
+      ]
+    },
+    "api_client": {
+      "description": "API client with limited programmatic access",
+      "permissions": ["api_access"],
+      "resource_access": {
+        "api": ["read", "write"]
+      },
+      "restrictions": [
+        "rate_limited",
+        "ip_restricted",
+        "no_admin_functions"
+      ]
+    }
+  },
+  "permissions": {
+    "read": {
+      "description": "Read access to resources",
+      "level": 1
+    },
+    "write": {
+      "description": "Write/update access to resources",
+      "level": 2
+    },
+    "delete": {
+      "description": "Delete access to resources",
+      "level": 3
+    },
+    "create": {
+      "description": "Create new resources",
+      "level": 2
+    },
+    "admin": {
+      "description": "Administrative access",
+      "level": 5
+    },
+    "audit": {
+      "description": "Audit and monitoring access",
+      "level": 4
+    }
+  },
+  "security_settings": {
+    "encryption_at_rest": true,
+    "encryption_in_transit": true,
+    "certificate_validation": true,
+    "secure_cookies": true,
+    "csrf_protection": true,
+    "xss_protection": true,
+    "clickjacking_protection": true
+  }
+}

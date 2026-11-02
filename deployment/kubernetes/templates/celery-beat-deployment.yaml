@@ -1,0 +1,129 @@
+{{- if .Values.celeryBeat.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-beat
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-beat
+spec:
+  replicas: {{ .Values.celeryBeat.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "threatintel-platform.selectorLabels" . | nindent 6 }}
+      component: celery-beat
+  template:
+    metadata:
+      {{- with .Values.celeryBeat.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "threatintel-platform.selectorLabels" . | nindent 8 }}
+        component: celery-beat
+    spec:
+      {{- with .Values.celeryBeat.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "threatintel-platform.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+      - name: celery-beat
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.celeryBeat.image.repository }}:{{ .Values.celeryBeat.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.celeryBeat.image.pullPolicy }}
+        command:
+        - celery
+        - -A
+        - app.celery
+        - beat
+        - --loglevel=info
+        - --scheduler
+        - django_celery_beat.schedulers:DatabaseScheduler
+        - --schedule
+        - {{ .Values.celeryBeat.env.CELERY_BEAT_SCHEDULE_FILE }}
+        env:
+        {{- range $key, $value := .Values.fastapi.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        - name: DATABASE_URL
+          value: {{ .Values.fastapi.env.DATABASE_URL }}
+        - name: REDIS_URL
+          value: {{ .Values.fastapi.env.REDIS_URL }}
+        - name: MONGO_URI
+          value: {{ .Values.fastapi.env.MONGO_URI }}
+        - name: CELERY_BEAT_SCHEDULE_FILE
+          value: {{ .Values.celeryBeat.env.CELERY_BEAT_SCHEDULE_FILE }}
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery
+            - inspect
+            - active
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - "celery -A app.celery inspect ping"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.celeryBeat.resources | nindent 12 }}
+        volumeMounts:
+        - name: beat-schedule
+          mountPath: /app
+        - name: beat-logs
+          mountPath: /var/log/celery
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: beat-schedule
+        emptyDir: {}
+      - name: beat-logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-celery-beat
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: celery-beat
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5555
+      targetPort: 5555
+      protocol: TCP
+      name: web
+  selector:
+    {{- include "threatintel-platform.selectorLabels" . | nindent 4 }}
+    component: celery-beat
+{{- end }}

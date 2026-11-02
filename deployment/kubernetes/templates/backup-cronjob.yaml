@@ -1,0 +1,348 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-backup
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: backup
+spec:
+  schedule: "{{ .Values.backup.schedule }}"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "threatintel-platform.selectorLabels" . | nindent 12 }}
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ include "threatintel-platform.serviceAccountName" . }}
+          containers:
+          - name: backup
+            image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+            command:
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -euo pipefail
+              
+              log() {
+                  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+              }
+              
+              log "Starting database backup"
+              
+              # PostgreSQL backup
+              log "Backing up PostgreSQL"
+              PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump \
+                -h postgresql -U threatintel_user -d threatintel \
+                --schema-only --verbose \
+                --file="/backup/postgres_schema_$(date +%Y%m%d_%H%M%S).sql"
+              
+              # MongoDB backup
+              log "Backing up MongoDB"
+              mongodump --host mongodb:27017 \
+                --username root --password "${MONGO_ROOT_PASSWORD}" \
+                --authenticationDatabase admin \
+                --db threatintel_logs \
+                --out="/backup/mongodb_$(date +%Y%m%d_%H%M%S)"
+              
+              # Redis backup
+              log "Backing up Redis"
+              redis-cli -h redis -a "${REDIS_PASSWORD}" --rdb "/backup/redis_$(date +%Y%m%d_%H%M%S).rdb"
+              
+              # Upload to S3
+              if [ -n "{{ .Values.backup.s3.bucket }}" ]; then
+                  log "Uploading backups to S3"
+                  aws s3 sync /backup/ "s3://{{ .Values.backup.s3.bucket }}/{{ .Release.Namespace }}/" \
+                    --region "{{ .Values.backup.s3.region }}" || log "S3 upload failed"
+              fi
+              
+              # Cleanup old local backups (keep 7 days)
+              find /backup -type f -mtime +7 -delete || true
+              
+              log "Backup completed"
+            env:
+            {{- range $key, $value := .Values.fastapi.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threatintel-platform.fullname" . }}-secrets
+                  key: postgres-password
+            - name: MONGO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threatintel-platform.fullname" . }}-secrets
+                  key: mongo-root-password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threatintel-platform.fullname" . }}-secrets
+                  key: redis-password
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threatintel-platform.fullname" . }}-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threatintel-platform.fullname" . }}-secrets
+                  key: aws-secret-access-key
+            resources:
+              {{- toYaml .Values.backup.resources | nindent 14 }}
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+            - name: backup-script
+              mountPath: /scripts
+              readOnly: true
+          volumes:
+          - name: backup-storage
+            emptyDir:
+              sizeLimit: 50Gi
+          - name: backup-script
+            configMap:
+              name: {{ include "threatintel-platform.fullname" . }}-backup-script
+              defaultMode: 0755
+          nodeSelector:
+            node-type: backup-node
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "threatintel-platform.fullname" . }}-backup-script
+  labels:
+    {{- include "threatintel-platform.labels" . | nindent 4 }}
+    component: backup
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    log() {
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+    }
+    
+    # Get configuration from environment
+    BACKUP_DIR="${BACKUP_DIR:-/backup}"
+    S3_BUCKET="${S3_BUCKET:-{{ .Values.backup.s3.bucket }}}"
+    S3_REGION="${S3_REGION:-{{ .Values.backup.s3.region }}}"
+    RETENTION_DAYS="${RETENTION_DAYS:-{{ .Values.backup.retention }}}"
+    
+    # Database connection settings
+    PGHOST="${PGHOST:-postgresql}"
+    PGPORT="${PGPORT:-5432}"
+    PGUSER="${PGUSER:-threatintel_user}"
+    PGPASSWORD="${POSTGRES_PASSWORD:-}"
+    PGDATABASE="${PGDATABASE:-threatintel}"
+    
+    MONGO_HOST="${MONGO_HOST:-mongodb}"
+    MONGO_PORT="${MONGO_PORT:-27017}"
+    MONGO_USER="${MONGO_USER:-root}"
+    MONGO_PASSWORD="${MONGO_ROOT_PASSWORD:-}"
+    MONGO_AUTH_DB="${MONGO_AUTH_DB:-admin}"
+    MONGO_DATABASE="${MONGO_DATABASE:-threatintel_logs}"
+    
+    REDIS_HOST="${REDIS_HOST:-redis}"
+    REDIS_PORT="${REDIS_PORT:-6379}"
+    REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+    
+    # Create backup directory
+    mkdir -p "$BACKUP_DIR"
+    
+    # PostgreSQL backup
+    backup_postgres() {
+        local timestamp=$(date +"%Y%m%d_%H%M%S")
+        local backup_name="postgres_${timestamp}"
+        local backup_path="${BACKUP_DIR}/${backup_name}"
+        
+        log "Starting PostgreSQL backup: $backup_name"
+        
+        # Create schema backup
+        PGPASSWORD="$PGPASSWORD" pg_dump \
+            -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+            --schema-only --verbose \
+            --file="${backup_path}_schema.sql" || {
+            log "ERROR: PostgreSQL backup failed"
+            return 1
+        }
+        
+        # Create data backup
+        PGPASSWORD="$PGPASSWORD" pg_dump \
+            -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+            --data-only --verbose \
+            --file="${backup_path}_data.sql" || {
+            log "ERROR: PostgreSQL data backup failed"
+            return 1
+        }
+        
+        # Compress backups
+        gzip "${backup_path}_schema.sql" "${backup_path}_data.sql" || {
+            log "ERROR: PostgreSQL compression failed"
+            return 1
+        }
+        
+        # Upload to S3
+        if [ -n "$S3_BUCKET" ] && command -v aws >/dev/null 2>&1; then
+            aws s3 cp "${backup_path}_schema.sql.gz" "s3://${S3_BUCKET}/postgres/" || log "WARNING: S3 upload failed"
+            aws s3 cp "${backup_path}_data.sql.gz" "s3://${S3_BUCKET}/postgres/" || log "WARNING: S3 upload failed"
+        fi
+        
+        log "PostgreSQL backup completed: $backup_name"
+    }
+    
+    # MongoDB backup
+    backup_mongodb() {
+        local timestamp=$(date +"%Y%m%d_%H%M%S")
+        local backup_name="mongodb_${timestamp}"
+        local backup_path="${BACKUP_DIR}/${backup_name}"
+        
+        log "Starting MongoDB backup: $backup_name"
+        
+        mongodump --host "$MONGO_HOST" --port "$MONGO_PORT" \
+            --username "$MONGO_USER" --password "$MONGO_PASSWORD" \
+            --authenticationDatabase "$MONGO_AUTH_DB" \
+            --db "$MONGO_DATABASE" \
+            --out="$backup_path" || {
+            log "ERROR: MongoDB backup failed"
+            return 1
+        }
+        
+        # Compress backup
+        tar -czf "${backup_path}.tar.gz" -C "$BACKUP_DIR" "$(basename "$backup_path")" || {
+            log "ERROR: MongoDB compression failed"
+            return 1
+        }
+        
+        # Upload to S3
+        if [ -n "$S3_BUCKET" ] && command -v aws >/dev/null 2>&1; then
+            aws s3 cp "${backup_path}.tar.gz" "s3://${S3_BUCKET}/mongodb/" || log "WARNING: S3 upload failed"
+        fi
+        
+        # Cleanup
+        rm -rf "$backup_path" "${backup_path}.tar.gz"
+        
+        log "MongoDB backup completed: $backup_name"
+    }
+    
+    # Redis backup
+    backup_redis() {
+        local timestamp=$(date +"%Y%m%d_%H%M%S")
+        local backup_name="redis_${timestamp}"
+        local backup_path="${BACKUP_DIR}/${backup_name}.rdb"
+        
+        log "Starting Redis backup: $backup_name"
+        
+        # Trigger BGSAVE and wait for completion
+        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" BGSAVE || {
+            log "ERROR: Redis BGSAVE failed"
+            return 1
+        }
+        
+        # Wait for save to complete
+        while ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" LASTSAVE | \
+              xargs -I {} redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" LASTSAVE | \
+              xargs -I {} redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" LASTSAVE | \
+              grep -v $$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" LASTSAVE) > /dev/null 2>&1; do
+            sleep 2
+        done
+        
+        # Copy dump file
+        local dump_file=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" CONFIG GET dir | tail -1)/dump.rdb
+        if [ -f "$dump_file" ]; then
+            cp "$dump_file" "$backup_path" || {
+                log "ERROR: Redis copy failed"
+                return 1
+            }
+        else
+            log "ERROR: Redis dump file not found"
+            return 1
+        fi
+        
+        # Compress backup
+        gzip "$backup_path" || {
+            log "ERROR: Redis compression failed"
+            return 1
+        }
+        
+        # Upload to S3
+        if [ -n "$S3_BUCKET" ] && command -v aws >/dev/null 2>&1; then
+            aws s3 cp "${backup_path}.gz" "s3://${S3_BUCKET}/redis/" || log "WARNING: S3 upload failed"
+        fi
+        
+        log "Redis backup completed: $backup_name"
+    }
+    
+    # Cleanup old backups
+    cleanup_backups() {
+        log "Cleaning up old backups (older than $RETENTION_DAYS days)"
+        
+        # Local cleanup
+        find "$BACKUP_DIR" -type f -name "*_*.gz" -mtime +$RETENTION_DAYS -delete || true
+        find "$BACKUP_DIR" -type d -name "*_*" -mtime +$RETENTION_DAYS -exec rm -rf {} + || true
+        
+        # S3 cleanup
+        if [ -n "$S3_BUCKET" ] && command -v aws >/dev/null 2>&1; then
+            aws s3 ls "s3://${S3_BUCKET}/" | while read -r line; do
+                local fileDate=$(echo $line | awk '{print $1" "$2}')
+                local fileDateSec=$(date -d "$fileDate" +%s)
+                local thresholdSec=$(date -d "$RETENTION_DAYS days ago" +%s)
+                
+                if [ $fileDateSec -lt $thresholdSec ]; then
+                    local fileName=$(echo $line | awk '{print $4}')
+                    aws s3 rm "s3://${S3_BUCKET}/$fileName" || log "WARNING: Failed to delete $fileName"
+                fi
+            done
+        fi
+        
+        log "Cleanup completed"
+    }
+    
+    # Main execution
+    main() {
+        log "=== Backup started ==="
+        
+        # Check database connectivity
+        if ! pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" >/dev/null 2>&1; then
+            log "ERROR: Cannot connect to PostgreSQL"
+            exit 1
+        fi
+        
+        if ! mongosh --host "$MONGO_HOST" --port "$MONGO_PORT" \
+            --username "$MONGO_USER" --password "$MONGO_PASSWORD" \
+            --authenticationDatabase "$MONGO_AUTH_DB" \
+            --eval "db.adminCommand('ping')" --quiet >/dev/null 2>&1; then
+            log "ERROR: Cannot connect to MongoDB"
+            exit 1
+        fi
+        
+        if ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+            log "ERROR: Cannot connect to Redis"
+            exit 1
+        fi
+        
+        # Perform backups
+        backup_postgres || log "PostgreSQL backup failed"
+        backup_mongodb || log "MongoDB backup failed"
+        backup_redis || log "Redis backup failed"
+        
+        # Cleanup
+        cleanup_backups || log "Cleanup failed"
+        
+        log "=== Backup completed ==="
+    }
+    
+    # Execute main function
+    main "$@"
+{{- end }}

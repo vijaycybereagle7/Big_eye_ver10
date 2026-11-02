@@ -1,0 +1,120 @@
+MIT License
+
+Copyright (c) 2025 Cybersecurity Database System Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+THIRD-PARTY LICENSES AND ATTRIBUTIONS
+
+This software incorporates code from or is dependent upon the following third-party libraries:
+
+1. FastAPI - MIT License
+2. SQLAlchemy - MIT License
+3. PyMongo - Apache License 2.0
+4. Redis - BSD License
+5. Pandas - BSD License
+6. Scikit-learn - BSD License
+7. NLTK - Apache License 2.0
+8. NumPy - BSD License
+9. Requests - Apache License 2.0
+10. Uvicorn - BSD License
+
+For complete license information, please refer to the documentation of each
+individual library.
+
+---
+
+THREAT INTELLIGENCE DATA USAGE NOTICE
+
+This software aggregates threat intelligence data from multiple external sources.
+Users are responsible for:
+
+1. Complying with the terms of service of each threat intelligence provider
+2. Respecting rate limits and usage policies of external APIs
+3. Verifying the accuracy and timeliness of threat intelligence data
+4. Using the data in compliance with applicable laws and regulations
+
+The maintainers of this software do not guarantee the accuracy, completeness,
+or timeliness of the threat intelligence data aggregated by this system.
+
+---
+
+SECURITY CONSIDERATIONS
+
+This software is designed to handle sensitive security data. Users should:
+
+1. Implement proper access controls and authentication
+2. Encrypt sensitive data at rest and in transit
+3. Regularly update dependencies and patch security vulnerabilities
+4. Monitor for unauthorized access to the system
+5. Follow security best practices for database and API security
+6. Implement proper backup and disaster recovery procedures
+7. Regularly audit system logs for security events
+
+The maintainers of this software are not responsible for security breaches
+or data leaks resulting from improper configuration or usage.
+
+---
+
+EXPORT CONTROL INFORMATION
+
+This software may be subject to export control laws and regulations.
+Users are responsible for complying with all applicable export control laws
+and regulations, including those of the United States and other jurisdictions.
+
+---
+
+DISCLAIMER OF WARRANTIES
+
+THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+OF SUCH DAMAGE.
+
+---
+
+SUPPORT AND WARRANTY
+
+THIS SOFTWARE IS PROVIDED WITHOUT ANY WARRANTIES, EXPRESS OR IMPLIED, AS
+TO THE CORRECTNESS, ACCURACY, OR RELIABILITY OF THE SOFTWARE, AND WITHOUT
+ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR
+NON-INFRINGEMENT.
+
+---
+
+GOVERNING LAW
+
+This license shall be governed by and construed in accordance with the laws
+of the jurisdiction in which the copyright holder is located, without regard
+to conflict of law principles.
