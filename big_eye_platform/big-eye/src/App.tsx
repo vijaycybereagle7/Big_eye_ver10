@@ -56,7 +56,7 @@ const baseTools = [
 ];
 
 function App() {
-  const [activeTool, setActiveTool] = useState<Tool>('all-in-one');
+  const [activeTool, setActiveTool] = useState<Tool>('command-center');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user, loading, signOut } = useAuth();
   const { isAdmin } = useIsAdmin();
